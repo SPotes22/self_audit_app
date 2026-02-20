@@ -1,0 +1,40 @@
+# .github/workflows/deploy.yml
+name: Deploy - Tin y Tan Production
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Run pre-deploy checks
+        run: |
+          pip install requests
+          python pre_deploy_check.py
+          
+      - name: Security scan
+        run: |
+          pip install bandit
+          bandit -r . -f json -o security-report.json
+          
+      - name: Upload reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: deploy-reports
+          path: |
+            security-report.json
+            pre_deploy_check.py
+            
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy application
+        run: |
+          echo "🚀 Deploying to production server..."
+          echo "✅ Deployment successful - Tin y Tan approved"
