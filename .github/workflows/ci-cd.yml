@@ -90,7 +90,7 @@ jobs:
     
     - name: Start application in background
       run: |
-        python secure_flask_app_json_fixed.py > flask_app.log 2>&1 &
+        python app.py > flask_app.log 2>&1 &
         echo $! > flask.pid
         sleep 10  # Dar tiempo para que inicie
     
