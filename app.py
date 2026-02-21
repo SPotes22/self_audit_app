@@ -1,9 +1,9 @@
 '''
-StockSpider api usage - Servidor de Archivos Básico en Red
-Copyright (C) 2025 Santiago Potes Giraldo
+auto-audited api usage - Servidor 
+Copyright (C) 2026 Santiago Potes Giraldo
 SPDX-License-Identifier: GPL-3.0-or-later
 
-Este archivo es parte de StockSpider.
+Este archivo es parte de auto-audited.
 
 StockSpider is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 '''
 # secure_flask_app_json_fixed.py
 import bcrypt
+import os
 import hashlib
 import base64
 import json
@@ -28,10 +29,26 @@ import datetime
 from functools import wraps
 import hmac
 from flask import Flask, request, jsonify, render_template, session
+import subprocess
+import sys
+import threading
+import queue
+from pathlib import Path
+
+
+
 
 app = Flask(__name__)
-# to do, use .env 
-app.config['SECRET_KEY'] = 'tin_tan_owasp_top10_secure_2024'
+ 
+try:
+    required_secret = os.getenv("SECRET_KEY", "default_value")
+    print(f"Required Secret: {required_secret}")
+except KeyError:
+    raise ValueError("Required environment variable 'REQUIRED_SECRET' is not set")
+
+
+app.config['SECRET_KEY'] = required_secret
+
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=24)
 
 # Simulación de base de datos en memoria
@@ -44,6 +61,36 @@ LOCKOUT_TIME = 900
 hash_cache = {}
 jwt_cache = {}
 
+
+# Configuración para los scripts
+SCRIPTS_DIR = Path(__file__).parent
+RESULTS_QUEUE = queue.Queue()
+SCRIPT_OUTPUTS = {}
+
+
+# Decorator para admin requerido
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization') or session.get('token')
+        
+        if not token:
+            return jsonify({"error": "Authentication required"}), 401
+            
+        if token.startswith('Bearer '):
+            token = token[7:]
+            
+        verification = CustomJWT.decode(token, app.config['SECRET_KEY'])
+        if "error" in verification:
+            return jsonify({"error": verification["error"]}), 401
+        
+        if verification.get('role') != 'admin':
+            return jsonify({"error": "Admin privileges required"}), 403
+            
+        request.current_user = verification
+        return f(*args, **kwargs)
+    return decorated
+    
 class CustomJWT:
     """JWT personalizado con seguridad OWASP Top10"""
     
@@ -144,278 +191,17 @@ def custom_jwt(f):
 @app.route('/register', methods=['GET'])
 def register_form():
     """Formulario HTML para registro"""
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Registro - Secure App</title>
-        <style>body{font-family:Arial;max-width:500px;margin:50px auto;padding:20px}.form-group{margin-bottom:15px}label{display:block;margin-bottom:5px}input,select{width:100%;padding:8px;border:1px solid #ddd;border-radius:4px}button{background:#007bff;color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer}.result{margin-top:20px;padding:10px;border-radius:4px}.success{background:#d4edda;color:#155724}.error{background:#f8d7da;color:#721c24}</style>
-    </head>
-    <body>
-        <h2>🔐 Registro de Usuario</h2>
-        <form id="registerForm">
-            <div class="form-group">
-                <label for="username">Usuario:</label>
-                <input type="text" id="username" name="username" required>
-            </div>
-            <div class="form-group">
-                <label for="password">Contraseña:</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <div class="form-group">
-                <label for="role">Rol:</label>
-                <select id="role" name="role">
-                    <option value="user">Usuario</option>
-                                    </select>
-            </div>
-            <button type="submit">Registrar</button>
-        </form>
-        <div id="result"></div>
-        
-        <script>
-            document.getElementById('registerForm').addEventListener('submit', async function(e) {
-                e.preventDefault();
-                const formData = {
-                    username: document.getElementById('username').value,
-                    password: document.getElementById('password').value,
-                    role: document.getElementById('role').value
-                };
-                
-                try {
-                    const response = await fetch('/register', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(formData)
-                    });
-                    
-                    const result = await response.json();
-                    const resultDiv = document.getElementById('result');
-                    
-                    if (response.ok) {
-                        resultDiv.className = 'result success';
-                        resultDiv.innerHTML = `<strong>✅ Éxito:</strong> ${result.message || 'Usuario registrado'}`;
-                    } else {
-                        resultDiv.className = 'result error';
-                        resultDiv.innerHTML = `<strong>❌ Error:</strong> ${result.error || 'Error desconocido'}`;
-                    }
-                } catch (error) {
-                    document.getElementById('result').className = 'result error';
-                    document.getElementById('result').innerHTML = `<strong>❌ Error de conexión:</strong> ${error.message}`;
-                }
-            });
-        </script>
-    </body>
-    </html>
-    '''
+    return render_template("register.html", title="Register")
 
 @app.route('/login', methods=['GET'])
 def login_form():
     """Formulario HTML para login"""
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Login - Secure App</title>
-        <style>body{font-family:Arial;max-width:500px;margin:50px auto;padding:20px}.form-group{margin-bottom:15px}label{display:block;margin-bottom:5px}input{width:100%;padding:8px;border:1px solid #ddd;border-radius:4px}button{background:#28a745;color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer}.result{margin-top:20px;padding:10px;border-radius:4px}.success{background:#d4edda;color:#155724}.error{background:#f8d7da;color:#721c24}.token{word-break:break-all;font-family:monospace;font-size:12px}</style>
-    </head>
-    <body>
-        <h2>🔑 Iniciar Sesión</h2>
-        <form id="loginForm">
-            <div class="form-group">
-                <label for="username">Usuario:</label>
-                <input type="text" id="username" name="username" required>
-            </div>
-            <div class="form-group">
-                <label for="password">Contraseña:</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <button type="submit">Iniciar Sesión</button>
-        </form>
-        <div id="result"></div>
-        
-        <script>
-            document.getElementById('loginForm').addEventListener('submit', async function(e) {
-                e.preventDefault();
-                const formData = {
-                    username: document.getElementById('username').value,
-                    password: document.getElementById('password').value
-                };
-                
-                try {
-                    const response = await fetch('/login', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(formData)
-                    });
-                    
-                    const result = await response.json();
-                    const resultDiv = document.getElementById('result');
-                    
-                    if (response.ok) {
-                        resultDiv.className = 'result success';
-                        resultDiv.innerHTML = `
-                            <strong>✅ ${result.message}</strong>
-                            <p><strong>Usuario:</strong> ${result.user.username}</p>
-                            <p><strong>Rol:</strong> ${result.user.role}</p>
-                            <div class="token">
-                                <strong>Token:</strong><br>
-                                ${result.token}
-                            </div>
-                            <p><em>Usa este token para acceder a endpoints protegidos</em></p>
-                            <button onclick="testProtectedEndpoint('${result.token}')">Probar Endpoint Protegido</button>
-                        `;
-                    } else {
-                        resultDiv.className = 'result error';
-                        resultDiv.innerHTML = `<strong>❌ Error:</strong> ${result.error || 'Error desconocido'}`;
-                    }
-                } catch (error) {
-                    document.getElementById('result').className = 'result error';
-                    document.getElementById('result').innerHTML = `<strong>❌ Error de conexión:</strong> ${error.message}`;
-                }
-            });
-
-            async function testProtectedEndpoint(token) {
-                try {
-                    const response = await fetch('/account', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                    
-                    const result = await response.json();
-                    alert('✅ Endpoint protegido funciona: ' + (result.message || 'Éxito'));
-                } catch (error) {
-                    alert('❌ Error: ' + error.message);
-                }
-            }
-        </script>
-    </body>
-    </html>
-    '''
+    return render_template("login.html", title="Login")
 
 @app.route('/account', methods=['GET'])
 def account_instructions():
     """Instrucciones para usar el endpoint protegido - FIXED"""
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Dashboard - Secure App</title>
-        <style>
-            body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
-            .card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-            .protected { background: #fff3cd; border-color: #ffeaa7; }
-            button { background: #6c757d; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
-            .token-input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; }
-            .result { background: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 10px; font-family: monospace; white-space: pre-wrap; }
-            .success { background: #d4edda; color: #155724; }
-            .error { background: #f8d7da; color: #721c24; }
-        </style>
-    </head>
-    <body>
-        <h1>🔐 Dashboard - Secure App</h1>
-        
-        <div class="card">
-            <h3>📋 Instrucciones de Uso</h3>
-            <ol>
-                <li>Ve a <a href="/register">/register</a> para crear un usuario</li>
-                <li>Ve a <a href="/login">/login</a> para obtener un token</li>
-                <li>Usa el token en el header Authorization: Bearer [token]</li>
-                <li>Accede a endpoints protegidos como /account (con token)</li>
-            </ol>
-        </div>
-
-        <div class="card protected">
-            <h3>🔒 Probar Endpoint Protegido</h3>
-            <p>Ingresa tu token JWT para probar el endpoint protegido:</p>
-            <input type="text" id="authToken" class="token-input" placeholder="Pega tu token JWT aquí" value="">
-            <div>
-                <button onclick="testProtectedEndpoint()">Probar Endpoint Protegido (POST)</button>
-                <button onclick="testProtectedGet()">Probar Endpoint GET</button>
-            </div>
-            <div id="protectedResult" class="result"></div>
-        </div>
-
-        <div class="card">
-            <h3>🌐 Estado del Servidor</h3>
-            <button onclick="checkHealth()">Verificar Salud</button>
-            <div id="healthResult" class="result"></div>
-        </div>
-
-        <script>
-            async function testProtectedEndpoint() {
-                const token = document.getElementById('authToken').value;
-                if (!token) {
-                    alert('Por favor ingresa un token');
-                    return;
-                }
-
-                try {
-                    const response = await fetch('/account', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                    
-                    const result = await response.json();
-                    const resultDiv = document.getElementById('protectedResult');
-                    resultDiv.textContent = JSON.stringify(result, null, 2);
-                    resultDiv.className = response.ok ? 'result success' : 'result error';
-                } catch (error) {
-                    document.getElementById('protectedResult').textContent = 'Error: ' + error.message;
-                    document.getElementById('protectedResult').className = 'result error';
-                }
-            }
-
-            async function testProtectedGet() {
-                const token = document.getElementById('authToken').value;
-                if (!token) {
-                    alert('Por favor ingresa un token');
-                    return;
-                }
-
-                try {
-                    const response = await fetch('/protected-data', {
-                        method: 'GET',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-                    
-                    const result = await response.json();
-                    const resultDiv = document.getElementById('protectedResult');
-                    resultDiv.textContent = JSON.stringify(result, null, 2);
-                    resultDiv.className = response.ok ? 'result success' : 'result error';
-                } catch (error) {
-                    document.getElementById('protectedResult').textContent = 'Error: ' + error.message;
-                    document.getElementById('protectedResult').className = 'result error';
-                }
-            }
-
-            async function checkHealth() {
-                try {
-                    const response = await fetch('/health');
-                    const result = await response.json();
-                    document.getElementById('healthResult').textContent = JSON.stringify(result, null, 2);
-                } catch (error) {
-                    document.getElementById('healthResult').textContent = 'Error: ' + error.message;
-                }
-            }
-
-            // Cargar token desde URL si existe
-            const urlParams = new URLSearchParams(window.location.search);
-            const tokenFromUrl = urlParams.get('token');
-            if (tokenFromUrl) {
-                document.getElementById('authToken').value = tokenFromUrl;
-            }
-        </script>
-    </body>
-    </html>
-    '''
+    return render_template("account.html", title="account")
 
 # ENDPOINTS API - SOLO JSON RESPONSES
 @app.route('/register', methods=['POST'])
@@ -569,6 +355,249 @@ def health():
         "server": "Secure Flask App JSON Fixed",
         "version": "2.2"
     })
+
+@app.route('/security/dashboard', methods=['GET'])
+@login_required
+def security_dashboard():
+    """Dashboard principal de seguridad"""
+    # Aquí renderizas el template
+    return render_template("security_dashboard.html", 
+                                 title="Security Dashboard",
+                                 user=request.current_user,
+                                 session=session)
+
+@app.route('/security/run-scans', methods=['POST'])
+@admin_required
+def run_security_scans():
+    """Ejecutar todos los escaneos de seguridad"""
+    
+    def run_script(script_name, script_path):
+        try:
+            # Ejecutar el script y capturar output
+            result = subprocess.run(
+                [sys.executable, script_path],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minutos máximo
+            )
+            
+            output = {
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "returncode": result.returncode,
+                "success": result.returncode == 0,
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+            
+            # Parsear resultados específicos según el script
+            if script_name == "check_files":
+                output["parsed"] = parse_check_files_output(result.stdout)
+            elif script_name == "security_audit":
+                output["parsed"] = parse_security_audit_output(result.stdout)
+            elif script_name == "pre_deploy":
+                output["parsed"] = parse_pre_deploy_output(result.stdout)
+            
+            SCRIPT_OUTPUTS[script_name] = output
+            
+        except subprocess.TimeoutExpired:
+            SCRIPT_OUTPUTS[script_name] = {
+                "error": "Timeout - El script tomó demasiado tiempo",
+                "success": False,
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+        except Exception as e:
+            SCRIPT_OUTPUTS[script_name] = {
+                "error": str(e),
+                "success": False,
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+    
+    # Ejecutar scripts en hilos separados
+    scripts = {
+        "check_files": SCRIPTS_DIR / "check_files.py",
+        "security_audit": SCRIPTS_DIR / "security_audit.py",
+        "pre_deploy": SCRIPTS_DIR / "pre_deploy_check.py"
+    }
+    
+    threads = []
+    for name, path in scripts.items():
+        if path.exists():
+            thread = threading.Thread(target=run_script, args=(name, str(path)))
+            thread.start()
+            threads.append(thread)
+    
+    # Esperar a que todos terminen (con timeout)
+    for thread in threads:
+        thread.join(timeout=310)
+    
+    return jsonify({
+        "status": "completed",
+        "results": SCRIPT_OUTPUTS,
+        "timestamp": datetime.datetime.now().isoformat()
+    })
+
+@app.route('/security/results', methods=['GET'])
+@login_required
+def get_security_results():
+    """Obtener los resultados más recientes"""
+    return jsonify({
+        "results": SCRIPT_OUTPUTS,
+        "timestamp": datetime.datetime.now().isoformat()
+    })
+
+@app.route('/security/run-single/<script_name>', methods=['POST'])
+@admin_required
+def run_single_script(script_name):
+    """Ejecutar un script específico"""
+    scripts = {
+        "check_files": SCRIPTS_DIR / "check_files.py",
+        "security_audit": SCRIPTS_DIR / "security_audit.py",
+        "pre_deploy": SCRIPTS_DIR / "pre_deploy_check.py"
+    }
+    
+    if script_name not in scripts:
+        return jsonify({"error": "Script no encontrado"}), 404
+    
+    script_path = scripts[script_name]
+    if not script_path.exists():
+        return jsonify({"error": f"Script {script_name} no encontrado en el servidor"}), 404
+    
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script_path)],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        
+        output = {
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode,
+            "success": result.returncode == 0,
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        
+        # Parseo específico
+        if script_name == "check_files":
+            output["parsed"] = parse_check_files_output(result.stdout)
+        elif script_name == "security_audit":
+            output["parsed"] = parse_security_audit_output(result.stdout)
+        elif script_name == "pre_deploy":
+            output["parsed"] = parse_pre_deploy_output(result.stdout)
+        
+        SCRIPT_OUTPUTS[script_name] = output
+        
+        return jsonify(output)
+        
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Timeout", "success": False}), 408
+    except Exception as e:
+        return jsonify({"error": str(e), "success": False}), 500
+
+# Funciones de parseo
+def parse_check_files_output(output):
+    """Parsear output de check_files.py"""
+    parsed = {
+        "detect_secrets_result": "No detectado",
+        "malware_scan_result": "No detectado",
+        "filtered_files": [],
+        "summary": {}
+    }
+    
+    if "detect-secrets encontró secretos" in output:
+        parsed["detect_secrets_result"] = "⚠️ Secretos detectados"
+    elif "Escaneo limpio" in output:
+        parsed["detect_secrets_result"] = "✅ Limpio"
+    
+    if "Posible código peligroso" in output:
+        parsed["malware_scan_result"] = "⚠️ Código sospechoso detectado"
+    else:
+        parsed["malware_scan_result"] = "✅ Limpio"
+    
+    # Extraer resumen
+    if "Se encontraron riesgos" in output:
+        parsed["summary"]["status"] = "Riesgos detectados"
+    elif "Escaneo limpio" in output:
+        parsed["summary"]["status"] = "Limpio"
+    
+    return parsed
+
+def parse_security_audit_output(output):
+    """Parsear output de security_audit.py"""
+    parsed = {
+        "vulnerabilities": [],
+        "total_issues": 0,
+        "files_affected": []
+    }
+    
+    lines = output.split('\n')
+    current_file = None
+    
+    for line in lines:
+        if line.endswith('.py:'):
+            current_file = line[:-1]
+            parsed["files_affected"].append(current_file)
+        elif line.strip().startswith('-'):
+            vuln = line.strip()[2:]
+            parsed["vulnerabilities"].append({
+                "file": current_file,
+                "issue": vuln
+            })
+            parsed["total_issues"] += 1
+    
+    return parsed
+
+def parse_pre_deploy_output(output):
+    """Parsear output de pre_deploy_check.py"""
+    parsed = {
+        "tests": [],
+        "summary": {},
+        "overall_status": "Pendiente"
+    }
+    
+    lines = output.split('\n')
+    current_test = None
+    
+    for line in lines:
+        if "Testing" in line and "..." in line:
+            current_test = line.replace("🔍", "").replace("...", "").strip()
+            parsed["tests"].append({
+                "name": current_test,
+                "results": []
+            })
+        elif "✅" in line and current_test:
+            if parsed["tests"]:
+                parsed["tests"][-1]["results"].append({
+                    "status": "success",
+                    "message": line.replace("✅", "").strip()
+                })
+        elif "❌" in line and current_test:
+            if parsed["tests"]:
+                parsed["tests"][-1]["results"].append({
+                    "status": "failure",
+                    "message": line.replace("❌", "").strip()
+                })
+    
+    # Extraer resumen
+    if "RESUMEN:" in output:
+        summary_lines = output[output.find("RESUMEN:"):].split('\n')
+        for line in summary_lines[1:]:
+            if "✅" in line or "❌" in line:
+                parts = line.split(":", 1)
+                if len(parts) > 1:
+                    parsed["summary"][parts[0].strip()] = parts[1].strip()
+    
+    # Determinar estado general
+    if any("❌" in line for line in lines):
+        parsed["overall_status"] = "Fallo"
+    elif all("✅" in line for line in lines if "Testing" not in line and "🔍" not in line):
+        parsed["overall_status"] = "Éxito"
+    else:
+        parsed["overall_status"] = "Advertencias"
+    
+    return parsed
+
 
 @app.route('/')
 def home():
