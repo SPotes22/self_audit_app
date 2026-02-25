@@ -35,6 +35,11 @@ import threading
 import queue
 from pathlib import Path
 from dotenv import load_dotenv
+import pickle
+import numpy as np
+from typing import Dict, Any, List
+import joblib 
+
 
 # Cargar variables de entorno desde .env
 load_dotenv()
@@ -161,6 +166,7 @@ class CustomJWT:
             
         except Exception as e:
             return {"error": f"Token invalid: {str(e)}"}
+
 
 # DECORATORS
 def login_required(f):
@@ -777,6 +783,497 @@ def promote_to_admin():
         "promoted_by": request.current_user.get('username')
     }), 200
 
+# ============================================
+# OCTOMATRIX THREAT DETECTION INTEGRATION
+# Basado en pre_deploy_check.py
+# ============================================
+
+class OctomatrixThreatDetector:
+    """Detector de amenazas usando el modelo Octomatrix (basado en pre_deploy_check.py)"""
+    
+    def __init__(self, model_path='octomatrix_model.pkl'):
+        self.model_path = Path(__file__).parent / model_path
+        self.model = None
+        self.patterns = self._get_default_patterns()  # Patrones por defecto de pre_deploy_check.py
+        self.load_model()
+    
+    def _get_default_patterns(self):
+        """Patrones de seguridad basados en pre_deploy_check.py"""
+        return {
+            'sql_injection': [
+                "' OR '1'='1",
+                "admin' --",
+                "'; DROP TABLE",
+                "' UNION SELECT",
+                "1=1--",
+                "' OR '1'='1'--",
+                "' OR 1=1--",
+                "1' ORDER BY--",
+                "1' GROUP BY--",
+                "' OR '1'='1'/*",
+                "' OR 1=1/*",
+                "') OR ('1'='1--"
+            ],
+            'path_traversal': [
+                "../../../etc/passwd",
+                "..\\..\\..\\windows\\win.ini",
+                "%2e%2e%2f%2e%2e%2fetc/passwd",
+                "....//....//etc/passwd",
+                "..;/etc/passwd",
+                "file:///etc/passwd",
+                "/etc/passwd",
+                "C:\\Windows\\System32\\drivers\\etc\\hosts"
+            ],
+            'xss_patterns': [
+                "<script>",
+                "javascript:",
+                "onerror=",
+                "onload=",
+                "alert(",
+                "eval(",
+                "document.cookie",
+                "<img src=x onerror=",
+                "<svg onload=",
+                "prompt(",
+                "confirm("
+            ],
+            'command_injection': [
+                "; ls",
+                "| cat /etc/passwd",
+                "&& whoami",
+                "|| dir",
+                "`id`",
+                "$(cat /etc/passwd)",
+                "& ping",
+                "| net user"
+            ],
+            'file_upload_malicious': [
+                ".php",
+                ".asp",
+                ".jsp",
+                ".exe",
+                ".sh",
+                ".bat",
+                ".pl",
+                ".cgi"
+            ]
+        }
+    
+    def load_model(self):
+        """Cargar el modelo .pkl de Octomatrix"""
+        try:
+            if self.model_path.exists():
+                with open(self.model_path, 'rb') as f:
+                    self.model = pickle.load(f)
+                
+                print(f"✅ Modelo Octomatrix cargado: {type(self.model).__name__}")
+                
+                # Si el modelo es un diccionario, actualizar patrones
+                if isinstance(self.model, dict):
+                    if 'patterns' in self.model:
+                        self.patterns.update(self.model['patterns'])
+                        print(f"📊 Patrones cargados del modelo: {sum(len(v) for v in self.model['patterns'].values())}")
+                    elif self.model:  # Si tiene otras keys, intentar mapear
+                        print(f"📊 Contenido del modelo: {list(self.model.keys())}")
+                        # Intentar extraer patrones si existen
+                        for key in ['sql', 'sqli', 'injection', 'patterns', 'rules']:
+                            if key in self.model and isinstance(self.model[key], (list, dict)):
+                                if isinstance(self.model[key], dict):
+                                    self.patterns.update(self.model[key])
+                                else:
+                                    self.patterns['custom_rules'] = self.model[key]
+                
+                return True
+            else:
+                print(f"⚠️ Modelo no encontrado en {self.model_path}")
+                return False
+        except Exception as e:
+            print(f"❌ Error cargando modelo Octomatrix: {str(e)}")
+            return False
+    
+    def analyze_input(self, user_input: str, input_type: str = "auto") -> dict:
+        """
+        Analizar input del usuario para detectar amenazas
+        input_type puede ser: 'auto', 'username', 'password', 'comment', 'file', 'url', 'search'
+        """
+        if not isinstance(user_input, str):
+            user_input = str(user_input)
+        
+        # Convertir a minúsculas para comparación
+        input_lower = user_input.lower()
+        
+        # Detectar tipo de input si es auto
+        if input_type == "auto":
+            input_type = self._detect_input_type(user_input)
+        
+        # Resultados del análisis
+        threats = {
+            'sql_injection': [],
+            'path_traversal': [],
+            'xss': [],
+            'command_injection': [],
+            'file_upload': []
+        }
+        
+        # 1. Detectar SQL Injection (basado en test_sql_injection de pre_deploy_check.py)
+        for pattern in self.patterns['sql_injection']:
+            if pattern.lower() in input_lower:
+                threats['sql_injection'].append(pattern)
+        
+        # Detectar patrones adicionales de SQLi
+        sqli_indicators = ["'", '"', '--', ';', 'union', 'select', 'drop', 'insert', 
+                          'update', 'delete', 'where', 'or 1=1', 'or \'1\'=\'1']
+        for indicator in sqli_indicators:
+            if indicator in input_lower:
+                if indicator not in threats['sql_injection']:
+                    threats['sql_injection'].append(f"indicator:{indicator}")
+        
+        # 2. Detectar Path Traversal (basado en test_path_traversal)
+        for pattern in self.patterns['path_traversal']:
+            if pattern.lower() in input_lower or pattern in user_input:
+                threats['path_traversal'].append(pattern)
+        
+        # Patrones adicionales de path traversal
+        if '../' in user_input or '..\\' in user_input or '%2e%2e%2f' in input_lower:
+            threats['path_traversal'].append('directory_traversal_sequence')
+        
+        # 3. Detectar XSS (Cross-Site Scripting)
+        for pattern in self.patterns['xss_patterns']:
+            if pattern.lower() in input_lower:
+                threats['xss'].append(pattern)
+        
+        # Detectar tags HTML
+        if '<' in user_input and '>' in user_input:
+            threats['xss'].append('html_tags_present')
+        
+        # 4. Detectar Command Injection
+        for pattern in self.patterns['command_injection']:
+            if pattern.lower() in input_lower:
+                threats['command_injection'].append(pattern)
+        
+        # 5. Detectar file upload malicioso (si aplica)
+        if input_type == 'file' or input_type == 'filename':
+            for ext in self.patterns['file_upload_malicious']:
+                if user_input.endswith(ext) or ext in user_input:
+                    threats['file_upload'].append(f"malicious_extension:{ext}")
+        
+        # Calcular nivel de amenaza
+        threat_score = self._calculate_threat_score(threats)
+        should_block = threat_score > 15  # Umbral: más de 30% de probabilidad
+        
+        # Determinar acciones recomendadas
+        actions = self._get_recommended_actions(threats, threat_score)
+        
+        return {
+            'input': user_input[:100] + '...' if len(user_input) > 100 else user_input,
+            'input_type': input_type,
+            'threats_detected': {k: v for k, v in threats.items() if v},
+            'threat_score': threat_score,
+            'should_block': should_block,
+            'risk_level': self._get_risk_level(threat_score),
+            'recommended_actions': actions,
+            'timestamp': datetime.datetime.now().isoformat()
+        }
+    
+    def _detect_input_type(self, user_input: str) -> str:
+        """Detectar automáticamente el tipo de input"""
+        input_lower = user_input.lower()
+        
+        # Detectar por patrones
+        if any(ext in user_input for ext in ['.php', '.asp', '.exe', '.sh']):
+            return 'filename'
+        if user_input.startswith('/') or ':\\' in user_input or '../' in user_input:
+            return 'path'
+        if 'http://' in input_lower or 'https://' in input_lower or '.' in user_input:
+            return 'url'
+        if len(user_input) > 50:  # Inputs largos suelen ser comentarios
+            return 'comment'
+        if any(op in user_input for op in ['+', '-', '*', '/', '=', '<', '>']):
+            return 'search'
+        
+        return 'generic'
+    
+    def _calculate_threat_score(self, threats: dict) -> float:
+        """Calcular puntuación de amenaza (0-100)"""
+        weights = {
+            'sql_injection': 35,
+            'path_traversal': 30,
+            'xss': 25,
+            'command_injection': 40,
+            'file_upload': 20
+        }
+        
+        total_score = 0
+        max_possible = sum(weights.values())
+        
+        for threat_type, detected in threats.items():
+            if detected:
+                # Cuantos más patrones, mayor puntuación
+                pattern_count = len(detected)
+                type_score = min(weights[threat_type], pattern_count * (weights[threat_type] / 3))
+                total_score += type_score
+        
+        return min(100, (total_score / max_possible) * 100)
+    
+    def _get_risk_level(self, score: float) -> str:
+        """Obtener nivel de riesgo basado en puntuación"""
+        if score >= 70:
+            return "CRÍTICO"
+        elif score >= 50:
+            return "ALTO"
+        elif score >= 30:
+            return "MEDIO"
+        elif score >= 10:
+            return "BAJO"
+        else:
+            return "INFO"
+    
+    def _get_recommended_actions(self, threats: dict, score: float) -> list:
+        """Obtener acciones recomendadas basadas en amenazas detectadas"""
+        actions = []
+        
+        if threats['sql_injection']:
+            actions.append("⚠️ Bloquear input - Posible SQL Injection detectado")
+            actions.append("🔒 Usar parámetros preparados/escapar caracteres especiales")
+        
+        if threats['path_traversal']:
+            actions.append("⚠️ Bloquear input - Intento de Path Traversal")
+            actions.append("🔒 Validar y sanitizar rutas de archivos")
+        
+        if threats['xss']:
+            actions.append("⚠️ Bloquear input - Posible XSS detectado")
+            actions.append("🔒 Escapar output y usar Content-Security-Policy")
+        
+        if threats['command_injection']:
+            actions.append("⚠️ Bloquear input - Intento de Command Injection")
+            actions.append("🔒 No ejecutar comandos del sistema con input de usuario")
+        
+        if threats['file_upload']:
+            actions.append("⚠️ Bloquear archivo - Extensión peligrosa detectada")
+            actions.append("🔒 Validar tipo MIME y contenido real del archivo")
+        
+        if score >= 30 and not actions:
+            actions.append("⚠️ Bloquear preventivamente - Input sospechoso")
+        
+        if not actions and score < 10:
+            actions.append("✅ Input seguro - Permitir procesamiento")
+        
+        return actions
+
+# Instancia global del detector
+octomatrix_detector = OctomatrixThreatDetector()
+
+# ============================================
+# ENDPOINT PRINCIPAL - El que pediste
+# ============================================
+
+@app.route('/octomatrix/check-input', methods=['POST'])
+def octomatrix_check_input():
+    """
+    ENDPOINT PRINCIPAL: Recibe input y BLOQUEA si es necesario
+    """
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+    
+    user_input = data.get('input') or data.get('text') or data.get('value') or data.get('data')
+    
+    if user_input is None:
+        return jsonify({"error": "No input to analyze. Provide 'input' field"}), 400
+    
+    input_type = data.get('type', 'auto')
+    
+    # Analizar el input
+    analysis = octomatrix_detector.analyze_input(user_input, input_type)
+    
+    # SI DEBE SER BLOQUEADO - DEVOLVER 403
+    if analysis['should_block']:
+        # Registrar IP del atacante
+        client_ip = request.remote_addr
+        # Aquí puedes agregar logging
+        
+        return jsonify({
+            "status": "blocked",
+            "message": "⛔ INPUT BLOQUEADO - Se detectaron patrones maliciosos",
+            "analysis": analysis,
+            "action": "BLOCK",
+            "ip_address": client_ip,
+            "timestamp": datetime.datetime.now().isoformat()
+        }), 403  # 403 Forbidden - Bloqueado
+    
+    # Input seguro - 200 OK
+    return jsonify({
+        "status": "allowed",
+        "message": "✅ Input permitido - No se detectaron amenazas",
+        "analysis": analysis,
+        "action": "ALLOW",
+        "timestamp": datetime.datetime.now().isoformat()
+    }), 200
+
+# ============================================
+# ENDPOINTS ADICIONALES ÚTILES
+# ============================================
+
+@app.route('/octomatrix/check-batch', methods=['POST'])
+def octomatrix_check_batch():
+    """Analizar múltiples inputs en una sola solicitud"""
+    data = request.get_json()
+    
+    if not data or 'inputs' not in data:
+        return jsonify({"error": "Provide 'inputs' array"}), 400
+    
+    inputs = data['inputs']
+    if not isinstance(inputs, list):
+        return jsonify({"error": "inputs must be an array"}), 400
+    
+    if len(inputs) > 50:
+        return jsonify({"error": "Maximum 50 inputs per batch"}), 400
+    
+    results = []
+    blocks = 0
+    
+    for item in inputs:
+        if isinstance(item, dict):
+            user_input = item.get('input') or item.get('text') or item.get('value')
+            input_type = item.get('type', 'auto')
+        else:
+            user_input = item
+            input_type = 'auto'
+        
+        if user_input:
+            analysis = octomatrix_detector.analyze_input(user_input, input_type)
+            if analysis['should_block']:
+                blocks += 1
+            results.append(analysis)
+    
+    return jsonify({
+        "status": "success",
+        "total_analyzed": len(results),
+        "total_blocked": blocks,
+        "results": results,
+        "timestamp": datetime.datetime.now().isoformat()
+    }), 200
+
+@app.route('/octomatrix/patterns', methods=['GET'])
+def octomatrix_patterns():
+    """Mostrar los patrones de detección actuales"""
+    return jsonify({
+        "status": "success",
+        "patterns": octomatrix_detector.patterns,
+        "total_patterns": sum(len(v) for v in octomatrix_detector.patterns.values()),
+        "timestamp": datetime.datetime.now().isoformat()
+    }), 200
+
+@app.route('/octomatrix/test-payloads', methods=['GET'])
+def octomatrix_test_payloads():
+    """Endpoint de prueba con payloads de pre_deploy_check.py"""
+    test_payloads = {
+        "sql_injection": [
+            "' OR '1'='1",
+            "admin' --",
+            "'; DROP TABLE users; --",
+            "' UNION SELECT * FROM users--"
+        ],
+        "path_traversal": [
+            "../../../etc/passwd",
+            "..\\..\\..\\windows\\win.ini",
+            "%2e%2e%2f%2e%2e%2fetc/passwd"
+        ],
+        "xss": [
+            "<script>alert('xss')</script>",
+            "javascript:alert(1)",
+            "<img src=x onerror=alert(1)>"
+        ],
+        "normal": [
+            "hola mundo",
+            "usuario_normal",
+            "Este es un comentario legítimo"
+        ]
+    }
+    
+    results = {}
+    for category, payloads in test_payloads.items():
+        results[category] = []
+        for payload in payloads:
+            analysis = octomatrix_detector.analyze_input(payload)
+            results[category].append({
+                "payload": payload,
+                "should_block": analysis['should_block'],
+                "risk_level": analysis['risk_level'],
+                "threats": analysis['threats_detected']
+            })
+    
+    return jsonify({
+        "status": "success",
+        "test_results": results,
+        "timestamp": datetime.datetime.now().isoformat()
+    }), 200
+
+# ============================================
+# MÉTODO PARA REGISTRAR ACTIVIDAD SOSPECHOSA
+# ============================================
+
+def log_suspicious_activity(self, ip, input_data, analysis):
+    """Registrar actividad sospechosa para análisis posterior"""
+    try:
+        log_file = Path(__file__).parent / "suspicious_activity.log"
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "ip": ip,
+            "input": input_data[:200],  # Truncar para log
+            "analysis": analysis,
+            "user_agent": request.headers.get('User-Agent', 'Unknown')
+        }
+        
+        with open(log_file, 'a') as f:
+            f.write(json.dumps(log_entry) + '\n')
+            
+        # También guardar IPs sospechosas
+        ip_file = Path(__file__).parent / "suspicious_ips.txt"
+        with open(ip_file, 'a') as f:
+            f.write(f"{ip} - {analysis['risk_level']} - {analysis['threats_detected']}\n")
+            
+    except Exception as e:
+        print(f"Error logging suspicious activity: {e}")
+
+# Después de cargar el modelo, agrega esta función de diagnóstico
+@app.route('/octomatrix/debug-model', methods=['GET'])
+@admin_required
+def debug_octomatrix_model():
+    """Endpoint de depuración para ver el contenido real del modelo"""
+    if octomatrix_detector.model is None:
+        return jsonify({"error": "Model not loaded"}), 404
+    
+    model_info = {
+        "type": str(type(octomatrix_detector.model)),
+        "is_dict": isinstance(octomatrix_detector.model, dict),
+    }
+    
+    if isinstance(octomatrix_detector.model, dict):
+        # Mostrar estructura del diccionario
+        model_info.update({
+            "keys": list(octomatrix_detector.model.keys()),
+            "sample": {k: str(v)[:200] for k, v in list(octomatrix_detector.model.items())[:5]},
+            "total_items": len(octomatrix_detector.model)
+        })
+        
+        # Si tiene patrones, mostrarlos
+        if 'patterns' in octomatrix_detector.model:
+            model_info["patterns_found"] = True
+            model_info["pattern_categories"] = list(octomatrix_detector.model['patterns'].keys())
+    
+    return jsonify({
+        "status": "success",
+        "model_info": model_info,
+        "current_patterns": octomatrix_detector.patterns,
+        "timestamp": datetime.datetime.now().isoformat()
+    }), 200
+
+@app.route('/octomatrix/test', methods=['GET'])
+def octomatrix_test_page():
+    """Página HTML para probar Octomatrix"""
+    return render_template("octomatrix_test.html", title="Octomatrix Security Tester")
 
 @app.route('/')
 def home():
@@ -815,5 +1312,6 @@ if __name__ == "__main__":
     print("   http://localhost:5000/register") 
     print("   http://localhost:5000/login")
     print("   http://localhost:5000/security/dashboard")
+    print("   http://localhost:5000/octomatrix/test")
     
     app.run(host='0.0.0.0', port=5000, debug=True)
