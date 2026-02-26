@@ -40,6 +40,8 @@ import numpy as np
 from typing import Dict, Any, List
 import joblib 
 
+from models import db, Formulario, FormStatus
+from datetime import datetime
 
 # Cargar variables de entorno desde .env
 load_dotenv()
@@ -47,7 +49,7 @@ app = Flask(__name__)
  
 try:
     required_secret = os.getenv("SECRET_KEY", "default_value")
-    print(f"Required Secret: {required_secret}")
+    # print(f"Required Secret: {required_secret}")
     # Al inicio del archivo, agrega:
     ADMIN_CREATION_SECRET = os.getenv('ADMIN_CREATION_SECRET', None)
 # Si no existe en .env, solo se permitirá crear admin como primer usuario
@@ -61,6 +63,20 @@ app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=24)
 
 # Simulación de base de datos en memoria
 users_db = {}
+
+# base de datos 
+# Configuración de la base de datos
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///formularios.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Inicializar SQLAlchemy con la app
+db.init_app(app)
+
+# Crear tablas (ejecutar solo una vez al iniciar)
+with app.app_context():
+    db.create_all()
+    print("✅ Base de datos inicializada")
+
 login_attempts = {}
 MAX_LOGIN_ATTEMPTS = 5
 LOCKOUT_TIME = 900
@@ -477,6 +493,7 @@ def health():
 
 @app.route('/security/dashboard', methods=['GET'])
 @login_required
+@custom_jwt
 def security_dashboard():
     """Dashboard principal de seguridad"""
     # Aquí renderizas el template
@@ -486,6 +503,7 @@ def security_dashboard():
                                  session=session)
 
 @app.route('/security/run-scans', methods=['POST'])
+@login_required
 @admin_required
 def run_security_scans():
     """Ejecutar todos los escaneos de seguridad"""
@@ -557,6 +575,7 @@ def run_security_scans():
 
 @app.route('/security/results', methods=['GET'])
 @login_required
+@admin_required
 def get_security_results():
     """Obtener los resultados más recientes"""
     return jsonify({
@@ -1068,6 +1087,7 @@ octomatrix_detector = OctomatrixThreatDetector()
 # ============================================
 
 @app.route('/octomatrix/check-input', methods=['POST'])
+@login_required
 def octomatrix_check_input():
     """
     ENDPOINT PRINCIPAL: Recibe input y BLOQUEA si es necesario
@@ -1116,6 +1136,7 @@ def octomatrix_check_input():
 # ============================================
 
 @app.route('/octomatrix/check-batch', methods=['POST'])
+@admin_required
 def octomatrix_check_batch():
     """Analizar múltiples inputs en una sola solicitud"""
     data = request.get_json()
@@ -1156,6 +1177,7 @@ def octomatrix_check_batch():
     }), 200
 
 @app.route('/octomatrix/patterns', methods=['GET'])
+@login_required
 def octomatrix_patterns():
     """Mostrar los patrones de detección actuales"""
     return jsonify({
@@ -1166,6 +1188,7 @@ def octomatrix_patterns():
     }), 200
 
 @app.route('/octomatrix/test-payloads', methods=['GET'])
+@admin_required
 def octomatrix_test_payloads():
     """Endpoint de prueba con payloads de pre_deploy_check.py"""
     test_payloads = {
@@ -1214,7 +1237,7 @@ def octomatrix_test_payloads():
 # MÉTODO PARA REGISTRAR ACTIVIDAD SOSPECHOSA
 # ============================================
 
-def log_suspicious_activity(self, ip, input_data, analysis):
+def log_suspicious_activity(ip, input_data, analysis):
     """Registrar actividad sospechosa para análisis posterior"""
     try:
         log_file = Path(__file__).parent / "suspicious_activity.log"
@@ -1275,6 +1298,184 @@ def octomatrix_test_page():
     """Página HTML para probar Octomatrix"""
     return render_template("octomatrix_test.html", title="Octomatrix Security Tester")
 
+# enpoints capa estatica
+# app.py - Reemplaza el endpoint /buy actual con este
+
+@app.route('/buy', methods=['GET', 'POST'])
+@custom_jwt
+def buy_service():
+    """Endpoint para compra - Maneja formularios con estados"""
+    
+    if request.method == 'GET':
+        # Renderizar formulario HTML
+        return render_template("buy.html", 
+                             title="Formulario de Compra",
+                             user=request.current_user if hasattr(request, 'current_user') else None)
+    
+    elif request.method == 'POST':
+        try:
+            # Obtener datos del formulario
+            data = request.get_json() if request.is_json else request.form
+            
+            nombre = data.get('nombre')
+            direccion = data.get('direccion_fisica')
+            celular = data.get('celular')
+            
+            # Validaciones básicas
+            if not all([nombre, direccion, celular]):
+                return jsonify({
+                    "error": "Todos los campos son requeridos",
+                    "required": ["nombre", "direccion_fisica", "celular"]
+                }), 400
+            
+            # Validar celular (ejemplo simple)
+            if not celular.isdigit() or len(celular) < 7:
+                return jsonify({"error": "Celular inválido"}), 400
+            
+            # Verificar Octomatrix para seguridad
+            octo_result = octomatrix_detector.analyze_input(f"{nombre} {direccion} {celular}")
+            if octo_result['should_block']:
+                log_suspicious_activity(request.remote_addr, data, octo_result)
+                return jsonify({
+                    "status": "blocked",
+                    "message": "Input bloqueado por seguridad",
+                    "risk_level": octo_result['risk_level']
+                }), 403
+            
+            # Crear nuevo formulario
+            nuevo_formulario = Formulario(
+                nombre=nombre.strip(),
+                direccion_fisica=direccion.strip(),
+                celular=celular.strip(),
+                status=FormStatus.DELAYED,  # Estado inicial
+                created_by=request.current_user.get('username') if hasattr(request, 'current_user') else None,
+                username=request.current_user.get('username') if hasattr(request, 'current_user') else None
+            )
+            
+            # Guardar en base de datos
+            db.session.add(nuevo_formulario)
+            db.session.commit()
+            
+            # Si la solicitud es JSON, devolver respuesta JSON
+            if request.is_json:
+                return jsonify({
+                    "status": "success",
+                    "message": "Formulario creado exitosamente",
+                    "formulario": nuevo_formulario.to_dict(),
+                    "estado_inicial": "delayed"
+                }), 201
+            else:
+                # Si es POST desde formulario HTML, redirigir o mostrar mensaje
+                return render_template("buy.html", 
+                                     success=True, 
+                                     message="Formulario enviado correctamente",
+                                     formulario_id=nuevo_formulario.id)
+                
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": f"Error al procesar formulario: {str(e)}"}), 500
+
+# app.py - Agrega estos endpoints después del /buy
+
+@app.route('/api/formularios', methods=['GET'])
+@login_required
+def listar_formularios():
+    """Listar todos los formularios (con filtros opcionales)"""
+    
+    # Obtener parámetros de consulta
+    status_filter = request.args.get('status')
+    username_filter = request.args.get('username')
+    
+    # Construir query
+    query = Formulario.query
+    
+    if status_filter:
+        try:
+            status_enum = FormStatus(status_filter)
+            query = query.filter_by(status=status_enum)
+        except ValueError:
+            return jsonify({"error": f"Status inválido. Opciones: {[s.value for s in FormStatus]}"}), 400
+    
+    if username_filter:
+        query = query.filter_by(username=username_filter)
+    
+    # Ordenar por fecha de creación (más recientes primero)
+    formularios = query.order_by(Formulario.created_at.desc()).all()
+    
+    return jsonify({
+        "status": "success",
+        "total": len(formularios),
+        "formularios": [f.to_dict() for f in formularios]
+    }), 200
+
+@app.route('/api/formularios/<int:form_id>', methods=['GET'])
+@login_required
+def obtener_formulario(form_id):
+    """Obtener un formulario específico"""
+    formulario = Formulario.query.get_or_404(form_id)
+    return jsonify(formulario.to_dict()), 200
+
+@app.route('/api/formularios/<int:form_id>/status', methods=['PUT', 'PATCH'])
+@login_required
+def actualizar_estado(form_id):
+    """Actualizar estado de un formulario"""
+    formulario = Formulario.query.get_or_404(form_id)
+    
+    data = request.get_json()
+    if not data or 'status' not in data:
+        return jsonify({"error": "Se requiere campo 'status'"}), 400
+    
+    new_status = data['status']
+    notes = data.get('notes')
+    
+    # Verificar si es admin para ciertos estados
+    if new_status in ['approved', 'archived']:
+        if request.current_user.get('role') != 'admin':
+            return jsonify({"error": "Solo administradores pueden aprobar o archivar"}), 403
+    
+    try:
+        formulario.update_status(new_status, notes)
+        
+        return jsonify({
+            "status": "success",
+            "message": f"Estado actualizado a {new_status}",
+            "formulario": formulario.to_dict()
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/formularios/<int:form_id>', methods=['DELETE'])
+@admin_required
+def eliminar_formulario(form_id):
+    """Eliminar un formulario (solo admin)"""
+    formulario = Formulario.query.get_or_404(form_id)
+    
+    db.session.delete(formulario)
+    db.session.commit()
+    
+    return jsonify({
+        "status": "success",
+        "message": f"Formulario {form_id} eliminado"
+    }), 200
+
+@app.route('/api/formularios/estadisticas', methods=['GET'])
+@login_required
+def estadisticas_formularios():
+    """Estadísticas de formularios por estado"""
+    
+    stats = {}
+    for status in FormStatus:
+        count = Formulario.query.filter_by(status=status).count()
+        stats[status.value] = count
+    
+    stats['total'] = sum(stats.values())
+    
+    return jsonify({
+        "status": "success",
+        "estadisticas": stats
+    }), 200
+
+
 @app.route('/')
 def home():
     """Home endpoint - SOLO JSON"""
@@ -1307,10 +1508,9 @@ if __name__ == "__main__":
     print("   GET  /health        - Estado del servidor (JSON)")
     print("\n🔧 FIX APPLIED: Todos los endpoints POST retornan JSON puro")
     print("🌐 Accede desde:")
-    print("   http://localhost:5000/setup/first-admin")
-    print("   http://localhost:5000/account")
     print("   http://localhost:5000/register") 
     print("   http://localhost:5000/login")
+    print("   http://localhost:5000/account")
     print("   http://localhost:5000/security/dashboard")
     print("   http://localhost:5000/octomatrix/test")
     
