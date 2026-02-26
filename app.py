@@ -39,9 +39,8 @@ import pickle
 import numpy as np
 from typing import Dict, Any, List
 import joblib 
-
 from models import db, Formulario, FormStatus
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Cargar variables de entorno desde .env
 load_dotenv()
@@ -57,18 +56,17 @@ except KeyError:
     raise ValueError("Required environment variable 'REQUIRED_SECRET' is not set")
 
 
-app.config['SECRET_KEY'] = required_secret
 
-app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=24)
-
-# Simulación de base de datos en memoria
-users_db = {}
 
 # base de datos 
 # Configuración de la base de datos
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///formularios.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = required_secret
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 
+# Simulación de base de datos en memoria
+users_db = {}
 # Inicializar SQLAlchemy con la app
 db.init_app(app)
 
@@ -268,7 +266,7 @@ def create_admin():
     
     users_db[username] = {
         'password_hash': password_hash.decode('utf-8'),
-        'created_at': datetime.datetime.now().isoformat(),
+        'created_at': datetime.now().isoformat(),
         'role': 'admin',  # Forzamos admin
         'last_login': None,
         'created_by': 'admin_secret_endpoint'
@@ -300,7 +298,7 @@ def list_admins():
         "status": "success",
         "total_admins": len(admins),
         "admins": admins,
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     }), 200
 
 
@@ -362,7 +360,7 @@ def register():
     
     users_db[username] = {
         'password_hash': password_hash.decode('utf-8'),
-        'created_at': datetime.datetime.now().isoformat(),
+        'created_at': datetime.now().isoformat(),
         'role': assigned_role,  # Usamos el rol asignado seguramente
         'last_login': None
     }
@@ -409,7 +407,7 @@ def login():
         if user_key in login_attempts:
             login_attempts[user_key] = []
         
-        user['last_login'] = datetime.datetime.now().isoformat()
+        user['last_login'] = datetime.now().isoformat()
         
         token_payload = {
             'username': username,
@@ -451,7 +449,7 @@ def account_protected():
         "status": "success",
         "message": "¡Bienvenido al dashboard protegido!",
         "user": user,
-        "access_time": datetime.datetime.now().isoformat(),
+        "access_time": datetime.now().isoformat(),
         "security": "OWASP Top10 Protected",
         "endpoint": "POST /account",
         "response_type": "JSON"
@@ -476,7 +474,7 @@ def protected_data():
                 "uptime": "running"
             }
         },
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     })
 
 @app.route('/health', methods=['GET'])
@@ -484,7 +482,7 @@ def health():
     """Health check - SOLO JSON"""
     return jsonify({
         "status": "healthy",
-        "timestamp": datetime.datetime.now().isoformat(),
+        "timestamp": datetime.now().isoformat(),
         "users_registered": len(users_db),
         "endpoints_working": True,
         "server": "Secure Flask App JSON Fixed",
@@ -494,6 +492,7 @@ def health():
 @app.route('/security/dashboard', methods=['GET'])
 @login_required
 @custom_jwt
+@admin_required
 def security_dashboard():
     """Dashboard principal de seguridad"""
     # Aquí renderizas el template
@@ -523,7 +522,7 @@ def run_security_scans():
                 "stderr": result.stderr,
                 "returncode": result.returncode,
                 "success": result.returncode == 0,
-                "timestamp": datetime.datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat()
             }
             
             # Parsear resultados específicos según el script
@@ -540,13 +539,13 @@ def run_security_scans():
             SCRIPT_OUTPUTS[script_name] = {
                 "error": "Timeout - El script tomó demasiado tiempo",
                 "success": False,
-                "timestamp": datetime.datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat()
             }
         except Exception as e:
             SCRIPT_OUTPUTS[script_name] = {
                 "error": str(e),
                 "success": False,
-                "timestamp": datetime.datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat()
             }
     
     # Ejecutar scripts en hilos separados
@@ -570,7 +569,7 @@ def run_security_scans():
     return jsonify({
         "status": "completed",
         "results": SCRIPT_OUTPUTS,
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     })
 
 @app.route('/security/results', methods=['GET'])
@@ -580,7 +579,7 @@ def get_security_results():
     """Obtener los resultados más recientes"""
     return jsonify({
         "results": SCRIPT_OUTPUTS,
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     })
 
 @app.route('/security/run-single/<script_name>', methods=['POST'])
@@ -613,7 +612,7 @@ def run_single_script(script_name):
             "stderr": result.stderr,
             "returncode": result.returncode,
             "success": result.returncode == 0,
-            "timestamp": datetime.datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat()
         }
         
         # Parseo específico
@@ -765,7 +764,7 @@ def setup_first_admin():
     
     users_db[username] = {
         'password_hash': password_hash.decode('utf-8'),
-        'created_at': datetime.datetime.now().isoformat(),
+        'created_at': datetime.now().isoformat(),
         'role': 'admin',  # Forzamos admin
         'last_login': None
     }
@@ -991,7 +990,7 @@ class OctomatrixThreatDetector:
             'should_block': should_block,
             'risk_level': self._get_risk_level(threat_score),
             'recommended_actions': actions,
-            'timestamp': datetime.datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat()
         }
     
     def _detect_input_type(self, user_input: str) -> str:
@@ -1119,7 +1118,7 @@ def octomatrix_check_input():
             "analysis": analysis,
             "action": "BLOCK",
             "ip_address": client_ip,
-            "timestamp": datetime.datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat()
         }), 403  # 403 Forbidden - Bloqueado
     
     # Input seguro - 200 OK
@@ -1128,7 +1127,7 @@ def octomatrix_check_input():
         "message": "✅ Input permitido - No se detectaron amenazas",
         "analysis": analysis,
         "action": "ALLOW",
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     }), 200
 
 # ============================================
@@ -1173,7 +1172,7 @@ def octomatrix_check_batch():
         "total_analyzed": len(results),
         "total_blocked": blocks,
         "results": results,
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     }), 200
 
 @app.route('/octomatrix/patterns', methods=['GET'])
@@ -1184,7 +1183,7 @@ def octomatrix_patterns():
         "status": "success",
         "patterns": octomatrix_detector.patterns,
         "total_patterns": sum(len(v) for v in octomatrix_detector.patterns.values()),
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     }), 200
 
 @app.route('/octomatrix/test-payloads', methods=['GET'])
@@ -1230,7 +1229,7 @@ def octomatrix_test_payloads():
     return jsonify({
         "status": "success",
         "test_results": results,
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     }), 200
 
 # ============================================
@@ -1242,7 +1241,7 @@ def log_suspicious_activity(ip, input_data, analysis):
     try:
         log_file = Path(__file__).parent / "suspicious_activity.log"
         log_entry = {
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "ip": ip,
             "input": input_data[:200],  # Truncar para log
             "analysis": analysis,
@@ -1290,7 +1289,7 @@ def debug_octomatrix_model():
         "status": "success",
         "model_info": model_info,
         "current_patterns": octomatrix_detector.patterns,
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     }), 200
 
 @app.route('/octomatrix/test', methods=['GET'])
