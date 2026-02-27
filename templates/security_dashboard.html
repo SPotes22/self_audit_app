@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header h1 i {
+            color: #667eea;
+        }
+
+        .user-info {
+            background: #f8f9fa;
+            padding: 10px 20px;
+            border-radius: 10px;
+            color: #495057;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .card-header h3 {
+            color: #495057;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .scan-result {
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .vulnerability-item {
+            padding: 10px;
+            margin: 5px 0;
+            border-left: 3px solid;
+            background: #f8f9fa;
+        }
+
+        .vuln-critical { border-color: #dc3545; }
+        .vuln-warning { border-color: #ffc107; }
+        .vuln-info { border-color: #17a2b8; }
+
+        .test-result {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+
+        .test-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .test-failure {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .metric-value {
+            font-size: 36px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+
+        .metric-label {
+            color: #6c757d;
+            font-size: 14px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .timestamp {
+            color: #6c757d;
+            font-size: 12px;
+            margin-top: 10px;
+            text-align: right;
+        }
+
+        .icon {
+            font-size: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                <i>🛡️</i>
+                Security Dashboard
+            </h1>
+            <div class="user-info">
+                <i>👤</i> {{ user.username }} ({{ user.role }})
+            </div>
+        </div>
+
+        <div class="metrics-grid" id="metrics">
+            <div class="metric-card">
+                <div class="icon">🔍</div>
+                <div class="metric-value" id="total-scans">0</div>
+                <div class="metric-label">Escaneos Realizados</div>
+            </div>
+            <div class="metric-card">
+                <div class="icon">⚠️</div>
+                <div class="metric-value" id="total-issues">0</div>
+                <div class="metric-label">Issues Detectados</div>
+            </div>
+            <div class="metric-card">
+                <div class="icon">✅</div>
+                <div class="metric-value" id="clean-scans">0</div>
+                <div class="metric-label">Escaneos Limpios</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="runAllScans()">
+                <span>🔄</span> Ejecutar Todos los Escaneos
+            </button>
+            <button class="btn btn-success" onclick="runSingleScan('check_files')">
+                <span>📁</span> Check Files
+            </button>
+            <button class="btn btn-warning" onclick="runSingleScan('security_audit')">
+                <span>🔒</span> Security Audit
+            </button>
+            <button class="btn btn-secondary" onclick="runSingleScan('pre_deploy')">
+                <span>🚀</span> Pre-Deploy
+            </button>
+            <button class="btn btn-secondary" onclick="refreshResults()">
+                <span>🔄</span> Actualizar
+            </button>
+        </div>
+
+        <div class="dashboard-grid">
+            <!-- Check Files Card -->
+            <div class="card" id="check_files_card">
+                <div class="card-header">
+                    <h3><span>📁</span> Check Files Scanner</h3>
+                    <span class="status-badge" id="check_files_status">Pendiente</span>
+                </div>
+                <div class="scan-result" id="check_files_output">
+                    No hay resultados disponibles. Ejecuta el escaneo.
+                </div>
+                <div class="timestamp" id="check_files_timestamp"></div>
+            </div>
+
+            <!-- Security Audit Card -->
+            <div class="card" id="security_audit_card">
+                <div class="card-header">
+                    <h3><span>🔒</span> Security Audit</h3>
+                    <span class="status-badge" id="security_audit_status">Pendiente</span>
+                </div>
+                <div class="scan-result" id="security_audit_output">
+                    No hay resultados disponibles. Ejecuta el escaneo.
+                </div>
+                <div class="timestamp" id="security_audit_timestamp"></div>
+            </div>
+
+            <!-- Pre-Deploy Card -->
+            <div class="card" id="pre_deploy_card">
+                <div class="card-header">
+                    <h3><span>🚀</span> Pre-Deploy Validation</h3>
+                    <span class="status-badge" id="pre_deploy_status">Pendiente</span>
+                </div>
+                <div class="scan-result" id="pre_deploy_output">
+                    No hay resultados disponibles. Ejecuta el escaneo.
+                </div>
+                <div class="timestamp" id="pre_deploy_timestamp"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function runAllScans() {
+            showLoading(true);
+            
+            try {
+                const response = await fetch('/security/run-scans', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer {{ session.token }}'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    setTimeout(() => refreshResults(), 2000);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function runSingleScan(scriptName) {
+            showLoading(true);
+            
+            try {
+                const response = await fetch(`/security/run-single/${scriptName}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer {{ session.token }}'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    updateCard(scriptName, data);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function refreshResults() {
+            try {
+                const response = await fetch('/security/results', {
+                    headers: {
+                        'Authorization': 'Bearer {{ session.token }}'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    updateDashboard(data.results);
+                    updateMetrics(data.results);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function updateDashboard(results) {
+            for (const [script, data] of Object.entries(results)) {
+                updateCard(script, data);
+            }
+        }
+
+        function updateCard(script, data) {
+            const card = document.getElementById(`${script}_card`);
+            const statusEl = document.getElementById(`${script}_status`);
+            const outputEl = document.getElementById(`${script}_output`);
+            const timestampEl = document.getElementById(`${script}_timestamp`);
+
+            if (data.success) {
+                statusEl.textContent = 'Completado';
+                statusEl.className = 'status-badge status-success';
+                
+                // Formatear output según el tipo de script
+                if (script === 'check_files' && data.parsed) {
+                    outputEl.innerHTML = formatCheckFilesOutput(data);
+                } else if (script === 'security_audit' && data.parsed) {
+                    outputEl.innerHTML = formatSecurityAuditOutput(data);
+                } else if (script === 'pre_deploy' && data.parsed) {
+                    outputEl.innerHTML = formatPreDeployOutput(data);
+                } else {
+                    outputEl.textContent = data.stdout || 'Sin output';
+                }
+            } else if (data.error) {
+                statusEl.textContent = 'Error';
+                statusEl.className = 'status-badge status-danger';
+                outputEl.textContent = `Error: ${data.error}`;
+            } else {
+                statusEl.textContent = 'Pendiente';
+                statusEl.className = 'status-badge status-warning';
+            }
+
+            if (data.timestamp) {
+                timestampEl.textContent = `Último escaneo: ${new Date(data.timestamp).toLocaleString()}`;
+            }
+        }
+
+        function formatCheckFilesOutput(data) {
+            const parsed = data.parsed || {};
+            return `
+                <strong>Detect Secrets:</strong> ${parsed.detect_secrets_result || 'N/A'}<br>
+                <strong>Malware Scan:</strong> ${parsed.malware_scan_result || 'N/A'}<br>
+                <strong>Estado:</strong> ${parsed.summary?.status || 'Desconocido'}<br>
+                <hr>
+                <pre>${data.stdout || ''}</pre>
+            `;
+        }
+
+        function formatSecurityAuditOutput(data) {
+            const parsed = data.parsed || {};
+            let html = `<strong>Total Issues:</strong> ${parsed.total_issues || 0}<br>`;
+            
+            if (parsed.vulnerabilities && parsed.vulnerabilities.length > 0) {
+                html += '<br><strong>Vulnerabilidades encontradas:</strong><br>';
+                parsed.vulnerabilities.forEach(v => {
+                    html += `<div class="vulnerability-item vuln-warning">
+                        <strong>📁 ${v.file}</strong><br>
+                        🔴 ${v.issue}
+                    </div>`;
+                });
+            }
+            
+            return html;
+        }
+
+        function formatPreDeployOutput(data) {
+            const parsed = data.parsed || {};
+            let html = `<strong>Estado General:</strong> ${parsed.overall_status || 'Desconocido'}<br><br>`;
+            
+            if (parsed.tests && parsed.tests.length > 0) {
+                parsed.tests.forEach(test => {
+                    html += `<strong>${test.name}</strong><br>`;
+                    test.results.forEach(r => {
+                        const statusClass = r.status === 'success' ? 'test-success' : 'test-failure';
+                        html += `<div class="test-result ${statusClass}">${r.message}</div>`;
+                    });
+                });
+            }
+            
+            return html;
+        }
+
+        function updateMetrics(results) {
+            let totalScans = 0;
+            let totalIssues = 0;
+            let cleanScans = 0;
+
+            for (const [script, data] of Object.entries(results)) {
+                if (data.success) {
+                    totalScans++;
+                    
+                    if (script === 'security_audit' && data.parsed) {
+                        totalIssues += data.parsed.total_issues || 0;
+                    }
+                    
+                    if (script === 'check_files' && data.parsed) {
+                        if (data.parsed.detect_secrets_result === '✅ Limpio' && 
+                            data.parsed.malware_scan_result === '✅ Limpio') {
+                            cleanScans++;
+                        }
+                    }
+                }
+            }
+
+            document.getElementById('total-scans').textContent = totalScans;
+            document.getElementById('total-issues').textContent = totalIssues;
+            document.getElementById('clean-scans').textContent = cleanScans;
+        }
+
+        function showLoading(show) {
+            const buttons = document.querySelectorAll('.btn');
+            buttons.forEach(btn => {
+                if (show) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="loading"></span> Procesando...';
+                } else {
+                    btn.disabled = false;
+                    // Restaurar texto original (simplificado)
+                    if (btn.classList.contains('btn-primary')) {
+                        btn.innerHTML = '<span>🔄</span> Ejecutar Todos los Escaneos';
+                    } else if (btn.classList.contains('btn-success')) {
+                        btn.innerHTML = '<span>📁</span> Check Files';
+                    } else if (btn.classList.contains('btn-warning')) {
+                        btn.innerHTML = '<span>🔒</span> Security Audit';
+                    } else if (btn.classList.contains('btn-secondary')) {
+                        if (btn.textContent.includes('Pre-Deploy')) {
+                            btn.innerHTML = '<span>🚀</span> Pre-Deploy';
+                        } else {
+                            btn.innerHTML = '<span>🔄</span> Actualizar';
+                        }
+                    }
+                }
+            });
+        }
+
+        // Auto-refresh cada 30 segundos
+        setInterval(refreshResults, 30000);
+
+        // Cargar resultados iniciales
+        refreshResults();
+    </script>
+</body>
+</html>

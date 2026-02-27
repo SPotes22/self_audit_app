@@ -1474,6 +1474,117 @@ def estadisticas_formularios():
         "estadisticas": stats
     }), 200
 
+# Ejemplo: Obtener SOLO los aprobados
+@app.route('/api/formularios/approved', methods=['GET'])
+def get_approved():
+    # CONSULTA ACTIVA a la BD - NO son datos decorativos
+    approved = Formulario.query.filter_by(status=FormStatus.APPROVED).all()
+    return jsonify([f.to_dict() for f in approved])
+
+# Ejemplo: Obtener los que necesitan revisión
+@app.route('/api/formularios/pending-review', methods=['GET'])
+def get_pending():
+    # CONSULTA REAL - NO es decorativo
+    pending = Formulario.query.filter(
+        Formulario.status.in_([FormStatus.DELAYED, FormStatus.REVISED])
+    ).all()
+    return jsonify([f.to_dict() for f in pending])
+
+@app.route('/api/demo/estados-activos', methods=['GET'])
+def demo_estados():
+    """Demostración de que el ORM gestiona datos activamente"""
+    
+    # 1. Crear un formulario de prueba
+    test = Formulario(
+        nombre="TEST_ACTIVO",
+        direccion_fisica="Demo Dirección",
+        celular="123456789"
+    )
+    db.session.add(test)
+    db.session.commit()
+    
+    resultado = {
+        "paso1_creado": test.to_dict(),
+        "mensaje": "Status inicial = delayed (automático)"
+    }
+    
+    # 2. Cambiar estado a REVISED
+    test.status = FormStatus.REVISED
+    db.session.commit()
+    
+    resultado["paso2_cambiado"] = test.to_dict()
+    resultado["mensaje2"] = "Status cambiado a revised"
+    
+    # 3. Agregar nota y cambiar a APPROVED
+    test.status = FormStatus.APPROVED
+    test.notes = "Aprobado en demo"
+    db.session.commit()
+    
+    resultado["paso3_aprobado"] = test.to_dict()
+    resultado["mensaje3"] = "Status cambiado a approved con nota"
+    
+    # 4. Mostrar que updated_at cambió automáticamente
+    resultado["conclusion"] = "⚠️ OBSERVA: updated_at cambió en cada paso automáticamente"
+    
+    return jsonify(resultado)
+
+@app.route('/api/dashboard/metrics', methods=['GET'])
+def dashboard_metrics():
+    """Métricas EN VIVO - NO son decorativas"""
+    return jsonify({
+        "total": Formulario.query.count(),
+        "pendientes": Formulario.query.filter_by(status=FormStatus.DELAYED).count(),
+        "revisados": Formulario.query.filter_by(status=FormStatus.REVISED).count(),
+        "aprobados": Formulario.query.filter_by(status=FormStatus.APPROVED).count(),
+        "archivados": Formulario.query.filter_by(status=FormStatus.ARCHIVED).count(),
+        "ultima_actualizacion": datetime.now().isoformat()
+    })
+
+@app.route('/api/formularios/<int:form_id>/approve', methods=['POST'])
+@admin_required
+def approve_form(form_id):
+    """Workflow de aprobación - MODIFICA LA BD"""
+    form = Formulario.query.get_or_404(form_id)
+    
+    # Lógica de negocio REAL
+    if form.status == FormStatus.ARCHIVED:
+        return jsonify({"error": "No se puede aprobar un formulario archivado"}), 400
+    
+    # CAMBIO REAL EN BD
+    form.status = FormStatus.APPROVED
+    form.notes = f"Aprobado por {request.current_user['username']} el {datetime.now().strftime('%Y-%m-%d')}"
+    db.session.commit()
+    
+    # Esto es un CAMBIO REAL, no decorativo
+    return jsonify({
+        "mensaje": "Formulario APROBADO en el sistema",
+        "formulario": form.to_dict(),
+        "accion": "BD_ACTUALIZADA"
+    })
+
+
+@app.route('/dashboard/formularios', methods=['GET'])
+@login_required
+def dashboard_formularios_view():
+    """Vista HTML del dashboard de formularios"""
+    return render_template("dashboard_formularios.html", 
+                         title="Dashboard de Formularios",
+                         user=request.current_user if hasattr(request, 'current_user') else None)
+
+@app.route('/landing')
+def generic_site():
+    "vista corporativa generica"
+    return render_template("landing.html")
+
+@app.route('/who')
+def about():
+    "vista corporativa generica"
+    return render_template("who.html")
+
+@app.route('/where')
+def site_location():
+    "vista corporativa generica"
+    return render_template("where.html")
 
 @app.route('/')
 def home():
@@ -1512,5 +1623,10 @@ if __name__ == "__main__":
     print("   http://localhost:5000/account")
     print("   http://localhost:5000/security/dashboard")
     print("   http://localhost:5000/octomatrix/test")
+    print("   http://localhost:5000/who")
+    print("   http://localhost:5000/where")
+    print("   http://localhost:5000/landing")
+    print("   http://localhost:5000/dashboard/formularios")
+    print("   http://localhost:5000/buy")
     
     app.run(host='0.0.0.0', port=5000, debug=True)

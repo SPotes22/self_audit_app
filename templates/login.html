@@ -1,0 +1,81 @@
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Login - Secure App</title>
+        <style>body{font-family:Arial;max-width:500px;margin:50px auto;padding:20px}.form-group{margin-bottom:15px}label{display:block;margin-bottom:5px}input{width:100%;padding:8px;border:1px solid #ddd;border-radius:4px}button{background:#28a745;color:white;padding:10px 20px;border:none;border-radius:4px;cursor:pointer}.result{margin-top:20px;padding:10px;border-radius:4px}.success{background:#d4edda;color:#155724}.error{background:#f8d7da;color:#721c24}.token{word-break:break-all;font-family:monospace;font-size:12px}</style>
+    </head>
+    <body>
+        <h2>🔑 Iniciar Sesión</h2>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Usuario:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Contraseña:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit">Iniciar Sesión</button>
+        </form>
+        <div id="result"></div>
+        
+        <script>
+            document.getElementById('loginForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const formData = {
+                    username: document.getElementById('username').value,
+                    password: document.getElementById('password').value
+                };
+                
+                try {
+                    const response = await fetch('/login', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    const result = await response.json();
+                    const resultDiv = document.getElementById('result');
+                    
+                    if (response.ok) {
+                        resultDiv.className = 'result success';
+                        resultDiv.innerHTML = `
+                            <strong>✅ ${result.message}</strong>
+                            <p><strong>Usuario:</strong> ${result.user.username}</p>
+                            <p><strong>Rol:</strong> ${result.user.role}</p>
+                            <div class="token">
+                                <strong>Token:</strong><br>
+                                ${result.token}
+                            </div>
+                            <p><em>Usa este token para acceder a endpoints protegidos</em></p>
+                            <button onclick="testProtectedEndpoint('${result.token}')">Probar Endpoint Protegido</button>
+                        `;
+                    } else {
+                        resultDiv.className = 'result error';
+                        resultDiv.innerHTML = `<strong>❌ Error:</strong> ${result.error || 'Error desconocido'}`;
+                    }
+                } catch (error) {
+                    document.getElementById('result').className = 'result error';
+                    document.getElementById('result').innerHTML = `<strong>❌ Error de conexión:</strong> ${error.message}`;
+                }
+            });
+
+            async function testProtectedEndpoint(token) {
+                try {
+                    const response = await fetch('/account', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    const result = await response.json();
+                    alert('✅ Endpoint protegido funciona: ' + (result.message || 'Éxito'));
+                } catch (error) {
+                    alert('❌ Error: ' + error.message);
+                }
+            }
+        </script>
+    </body>
+    </html>

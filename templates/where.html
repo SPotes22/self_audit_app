@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Contacto — Auditoría & Confianza</title>
+    <style>
+        :root{--accent:#0ea5a4;--dark:#081226;--card:#0f1724}
+        *{box-sizing:border-box}
+        body{margin:0;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial; background:linear-gradient(180deg,#071129 0%, #0b2540 60%);color:#e6f0f6;min-height:100vh;display:flex;flex-direction:column}
+        header{padding:48px 6% 24px;display:flex;align-items:center;justify-content:space-between}
+        .brand{display:flex;gap:14px;align-items:center}
+        .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#0369a1);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+        .logo svg{width:30px;height:30px;fill:white}
+        .title{font-weight:700;font-size:1.1rem}
+        nav a{color:#cfeff0;margin-left:18px;text-decoration:none;font-weight:600}
+
+        main{flex:1;padding:24px 6% 64px}
+        .content{max-width:900px;margin:0 auto}
+        h1{font-size:2.4rem;margin:0 0 24px;line-height:1.02}
+        h2{font-size:1.8rem;margin:32px 0 16px;color:#bfe8e6;font-weight:700}
+        p{font-size:1.05rem;line-height:1.6;margin:0 0 16px;color:#bfe8e6}
+        
+        .contact-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;margin-top:32px}
+        .contact-card{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));border-radius:16px;padding:28px;color:#d8eef0;backdrop-filter:blur(6px);box-shadow:0 10px 40px rgba(2,6,23,.6);border:1px solid rgba(255,255,255,.05)}
+        .contact-card h3{font-size:1.3rem;margin:12px 0 16px;color:#0ea5a4;display:flex;align-items:center;gap:10px}
+        .contact-card p{font-size:0.95rem;color:#bfe8e6;margin:8px 0;line-height:1.6}
+        .contact-icon{font-size:1.8rem}
+
+        .highlight{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));border-radius:16px;padding:22px;border-left:4px solid var(--accent);margin:24px 0}
+        .highlight p{margin:0;color:#d8eef0;font-weight:600}
+
+        .btn{background:var(--accent);color:#052026;padding:12px 24px;border-radius:10px;border:none;font-weight:700;cursor:pointer;box-shadow:0 8px 30px rgba(14,165,164,.12);transition:transform .14s ease;margin-top:16px;display:inline-block;text-decoration:none;font-size:1rem}
+        .btn:hover{transform:translateY(-3px)}
+
+        footer{padding:18px 6%;font-size:0.95rem;color:#9fcbd0;display:flex;justify-content:space-between;align-items:center;margin-top:32px}
+
+        @media (max-width:900px){
+            .contact-grid{grid-template-columns:1fr;}
+            main{padding:16px 6% 48px}
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <div class="logo" aria-hidden>
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7v5c0 5 5 9 10 10 5-1 10-5 10-10V7l-10-5zM11 17l-4-4 1.4-1.4L11 14.2 15.6 9.6 17 11l-6 6z"/></svg>
+            </div>
+            <div>
+                <div class="title">Auditoría & Confianza</div>
+                <div style="font-size:.85rem;color:#9fdfe0">Auditores independientes — transparencia técnica</div>
+            </div>
+        </div>
+        <nav>
+            <a href="/landing">Inicio</a>
+            <a href="/who">Quiénes</a>
+            <a href="/where">Contacto</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="content">
+            <h1>📍 Contacto y Disponibilidad</h1>
+            <p>Estamos disponibles para auditorías técnicas, pruebas de penetración y evaluaciones de cumplimiento normativo en modalidad remota para toda la región. Ofrecemos servicios flexibles adaptados a tu calendario y necesidades específicas.</p>
+
+            <h2>¿Cómo Trabajamos?</h2>
+            <div class="contact-grid">
+                <div class="contact-card">
+                    <h3><span class="contact-icon">🌐</span>Modalidad Remota</h3>
+                    <p>Acceso seguro a través de conexiones encriptadas. No requerimos presencia física, lo que permite auditorías eficientes independientemente de tu ubicación geográfica.</p>
+                </div>
+                <div class="contact-card">
+                    <h3><span class="contact-icon">📅</span>Calendarios Flexibles</h3>
+                    <p>Coordinamos horarios que se adapten a tu disponibilidad. Ofrecemos sesiones parciales, evaluaciones full-time o auditorías escalonadas según tu necesidad.</p>
+                </div>
+                <div class="contact-card">
+                    <h3><span class="contact-icon">🔒</span>Confidencialidad Total</h3>
+                    <p>Acuerdos de confidencialidad (NDAs) que protegen tu información. Reportes securizados y canales de comunicación encriptados garantizados.</p>
+                </div>
+            </div>
+
+            <h2>Proceso de Contratación</h2>
+            <div class="highlight">
+                <p>📧 Contacta → 🤝 Consultoría inicial gratuita → 📋 Propuesta personalizada → ✅ Inicio de auditoría</p>
+            </div>
+
+            <h2>Áreas de Cobertura</h2>
+            <div class="contact-grid">
+                <div class="contact-card">
+                    <h3><span class="contact-icon">🏢</span>Tecnología Financiera</h3>
+                    <p>Auditorías para fintechs, plataformas de pago y sistemas de gestión financiera.</p>
+                </div>
+                <div class="contact-card">
+                    <h3><span class="contact-icon">🏥</span>Sector Salud</h3>
+                    <p>Cumplimiento normativo para sistemas médicos, datos de pacientes y privacidad (HIPAA, GDPR).</p>
+                </div>
+                <div class="contact-card">
+                    <h3><span class="contact-icon">☁️</span>Infraestructura Cloud</h3>
+                    <p>Evaluaciones de seguridad en AWS, Azure, GCP y arquitecturas on-premise/hybrid.</p>
+                </div>
+            </div>
+
+            <div style="margin-top:40px;padding:24px;background:linear-gradient(180deg, rgba(14,165,164,.1), rgba(3,105,161,.05));border-radius:16px;border:1px solid rgba(14,165,164,.2)">
+                <h2 style="margin-top:0">Listo para Comenzar?</h2>
+                <p>Envianos un correo o solicita una consulta inicial gratuita de 30 minutos para analizar el alcance de tu auditoría.</p>
+                <button class="btn">Solicitar Consulta Gratuita</button>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <div>© 2026 Auditoría & Confianza — Todos los derechos reservados</div>
+        <div style="display:flex;gap:12px;align-items:center"><div style="background:#16a34a;padding:6px 10px;border-radius:8px;font-weight:700;color:#012018">HTTPS</div><div style="opacity:.8">Puerto 443</div></div>
+    </footer>
+</body>
+</html>
