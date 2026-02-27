@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Auditoría Profesional — Confianza y Transparencia</title>
+    <style>
+        :root{--accent:#0ea5a4;--dark:#081226;--card:#0f1724}
+        *{box-sizing:border-box}
+        body{margin:0;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial; background:linear-gradient(180deg,#071129 0%, #0b2540 60%);color:#e6f0f6;min-height:100vh;display:flex;flex-direction:column}
+        header{padding:48px 6% 24px;display:flex;align-items:center;justify-content:space-between}
+        .brand{display:flex;gap:14px;align-items:center}
+        .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#0369a1);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+        .logo svg{width:30px;height:30px;fill:white}
+        .title{font-weight:700;font-size:1.1rem}
+        nav a{color:#cfeff0;margin-left:18px;text-decoration:none;font-weight:600}
+
+        main{flex:1;padding:24px 6% 64px}
+        .hero{display:grid;grid-template-columns:1fr 420px;gap:32px;align-items:center}
+        .hero-left{max-width:780px}
+        h1{font-size:2.4rem;margin:0 0 12px;line-height:1.02}
+        p.lead{color:#bfe8e6;font-size:1.05rem;margin:0 0 22px}
+        .cta{display:flex;gap:12px;margin-top:18px}
+        .btn{background:var(--accent);color:#052026;padding:12px 18px;border-radius:10px;border:none;font-weight:700;cursor:pointer;box-shadow:0 8px 30px rgba(14,165,164,.12);transition:transform .14s ease}
+        .btn:hover{transform:translateY(-3px)}
+
+        /* card with SVG hero */
+        .hero-right{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));border-radius:16px;padding:22px;color:#d8eef0;backdrop-filter:blur(6px);box-shadow:0 10px 40px rgba(2,6,23,.6)}
+        .shield{display:flex;align-items:center;gap:14px}
+        .shield svg{width:88px;height:88px}
+        .features{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:28px}
+        .feature{background:var(--card);Padding:12px;border-radius:10px;color:#dff7f6;text-align:center;font-weight:600}
+
+        section.testimonials{margin-top:40px}
+        .test-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+        .test{background:rgba(255,255,255,.02);padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,.03)}
+
+        footer{padding:18px 6%;font-size:0.95rem;color:#9fcbd0;display:flex;justify-content:space-between;align-items:center}
+
+        @media (max-width:900px){.hero{grid-template-columns:1fr;}.hero-right{order:-1;margin-bottom:18px}}
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <div class="logo" aria-hidden>
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7v5c0 5 5 9 10 10 5-1 10-5 10-10V7l-10-5zM11 17l-4-4 1.4-1.4L11 14.2 15.6 9.6 17 11l-6 6z"/></svg>
+            </div>
+            <div>
+                <div class="title">Auditoría & Confianza</div>
+                <div style="font-size:.85rem;color:#9fdfe0">Auditores independientes — transparencia técnica</div>
+            </div>
+        </div>
+        <nav>
+            <a href="/who">Quiénes</a>
+            <a href="/buy">Servicios</a>
+            <a href="/where">Contacto</a>
+            
+        </nav>
+    </header>
+
+    <main>
+        <div class="hero">
+            <div class="hero-left">
+                <h1>Auditoría técnica que protege tu negocio</h1>
+                <p class="lead">Revisamos código, procesos y controles para identificar riesgos y convertirlos en oportunidades de mejora con reportes claros y accionables.</p>
+                <div class="cta">
+                    <button class="btn">Solicitar auditoría</button>
+                    <a href="/who.html" style="align-self:center;color:#9fe9e6;text-decoration:none;font-weight:700">Conoce al equipo →</a>
+                </div>
+
+                <section class="testimonials">
+                    <h3 style="margin:18px 0 10px">Lo que dicen nuestros clientes</h3>
+                    <div class="test-grid">
+                        <div class="test">“Rápidos y profesionales — encontramos vulnerabilidades reales.” <div style="margin-top:8px;font-weight:700;color:#cfeff0">CTO, fintech</div></div>
+                        <div class="test">“Informe claro, pasos prioritarios y excelente soporte posterior.” <div style="margin-top:8px;font-weight:700;color:#cfeff0">Head of Security</div></div>
+                        <div class="test">“Recomendados para auditorías regulatorias y pen-tests.” <div style="margin-top:8px;font-weight:700;color:#cfeff0">Manager, salud</div></div>
+                    </div>
+                </section>
+            </div>
+
+            <aside class="hero-right">
+                <div class="shield">
+                    <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                        <defs>
+                            <linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#0ea5a4"/><stop offset="1" stop-color="#0369a1"/></linearGradient>
+                        </defs>
+                        <path d="M32 4c-8 4-18 6-24 10v12c0 15 12 28 24 34 12-6 24-19 24-34V14C50 10 40 8 32 4z" fill="url(#g)"/>
+                        <path d="M26 34l-5-5 3-3 2 2 8-8 3 3-11 11z" fill="#dff7f6"/>
+                    </svg>
+                    <div>
+                        <div style="font-weight:800;font-size:1.05rem">Protección demostrable</div>
+                        <div style="color:#bfe8e6;margin-top:6px;max-width:240px">Auditorías técnicas, revisiones de cumplimiento y pruebas prácticas con evidencia reproducible.</div>
+                    </div>
+                </div>
+
+                <div class="features" aria-hidden>
+                    <div class="feature">Revisión de código</div>
+                    <div class="feature">Pruebas prácticas</div>
+                    <div class="feature">Reporte ejecutable</div>
+                </div>
+            </aside>
+        </div>
+    </main>
+
+    <footer>
+        <div>© {2026} Auditoría & Confianza — Todos los derechos reservados</div>
+        <div style="display:flex;gap:12px;align-items:center"><div style="background:#16a34a;padding:6px 10px;border-radius:8px;font-weight:700;color:#012018">HTTPS</div><div style="opacity:.8">Puerto 443</div></div>
+    </footer>
+</body>
+</html>

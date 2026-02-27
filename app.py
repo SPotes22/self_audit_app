@@ -39,7 +39,8 @@ import pickle
 import numpy as np
 from typing import Dict, Any, List
 import joblib 
-
+from models import db, Formulario, FormStatus
+from datetime import datetime, timedelta
 
 # Cargar variables de entorno desde .env
 load_dotenv()
@@ -47,7 +48,7 @@ app = Flask(__name__)
  
 try:
     required_secret = os.getenv("SECRET_KEY", "default_value")
-    print(f"Required Secret: {required_secret}")
+    # print(f"Required Secret: {required_secret}")
     # Al inicio del archivo, agrega:
     ADMIN_CREATION_SECRET = os.getenv('ADMIN_CREATION_SECRET', None)
 # Si no existe en .env, solo se permitirá crear admin como primer usuario
@@ -55,12 +56,25 @@ except KeyError:
     raise ValueError("Required environment variable 'REQUIRED_SECRET' is not set")
 
 
-app.config['SECRET_KEY'] = required_secret
 
-app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=24)
+
+# base de datos 
+# Configuración de la base de datos
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///formularios.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = required_secret
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 
 # Simulación de base de datos en memoria
 users_db = {}
+# Inicializar SQLAlchemy con la app
+db.init_app(app)
+
+# Crear tablas (ejecutar solo una vez al iniciar)
+with app.app_context():
+    db.create_all()
+    print("✅ Base de datos inicializada")
+
 login_attempts = {}
 MAX_LOGIN_ATTEMPTS = 5
 LOCKOUT_TIME = 900
@@ -252,7 +266,7 @@ def create_admin():
     
     users_db[username] = {
         'password_hash': password_hash.decode('utf-8'),
-        'created_at': datetime.datetime.now().isoformat(),
+        'created_at': datetime.now().isoformat(),
         'role': 'admin',  # Forzamos admin
         'last_login': None,
         'created_by': 'admin_secret_endpoint'
@@ -284,7 +298,7 @@ def list_admins():
         "status": "success",
         "total_admins": len(admins),
         "admins": admins,
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     }), 200
 
 
@@ -346,7 +360,7 @@ def register():
     
     users_db[username] = {
         'password_hash': password_hash.decode('utf-8'),
-        'created_at': datetime.datetime.now().isoformat(),
+        'created_at': datetime.now().isoformat(),
         'role': assigned_role,  # Usamos el rol asignado seguramente
         'last_login': None
     }
@@ -393,7 +407,7 @@ def login():
         if user_key in login_attempts:
             login_attempts[user_key] = []
         
-        user['last_login'] = datetime.datetime.now().isoformat()
+        user['last_login'] = datetime.now().isoformat()
         
         token_payload = {
             'username': username,
@@ -435,7 +449,7 @@ def account_protected():
         "status": "success",
         "message": "¡Bienvenido al dashboard protegido!",
         "user": user,
-        "access_time": datetime.datetime.now().isoformat(),
+        "access_time": datetime.now().isoformat(),
         "security": "OWASP Top10 Protected",
         "endpoint": "POST /account",
         "response_type": "JSON"
@@ -460,7 +474,7 @@ def protected_data():
                 "uptime": "running"
             }
         },
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     })
 
 @app.route('/health', methods=['GET'])
@@ -468,7 +482,7 @@ def health():
     """Health check - SOLO JSON"""
     return jsonify({
         "status": "healthy",
-        "timestamp": datetime.datetime.now().isoformat(),
+        "timestamp": datetime.now().isoformat(),
         "users_registered": len(users_db),
         "endpoints_working": True,
         "server": "Secure Flask App JSON Fixed",
@@ -477,6 +491,8 @@ def health():
 
 @app.route('/security/dashboard', methods=['GET'])
 @login_required
+@custom_jwt
+@admin_required
 def security_dashboard():
     """Dashboard principal de seguridad"""
     # Aquí renderizas el template
@@ -486,6 +502,7 @@ def security_dashboard():
                                  session=session)
 
 @app.route('/security/run-scans', methods=['POST'])
+@login_required
 @admin_required
 def run_security_scans():
     """Ejecutar todos los escaneos de seguridad"""
@@ -505,7 +522,7 @@ def run_security_scans():
                 "stderr": result.stderr,
                 "returncode": result.returncode,
                 "success": result.returncode == 0,
-                "timestamp": datetime.datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat()
             }
             
             # Parsear resultados específicos según el script
@@ -522,13 +539,13 @@ def run_security_scans():
             SCRIPT_OUTPUTS[script_name] = {
                 "error": "Timeout - El script tomó demasiado tiempo",
                 "success": False,
-                "timestamp": datetime.datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat()
             }
         except Exception as e:
             SCRIPT_OUTPUTS[script_name] = {
                 "error": str(e),
                 "success": False,
-                "timestamp": datetime.datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat()
             }
     
     # Ejecutar scripts en hilos separados
@@ -552,16 +569,17 @@ def run_security_scans():
     return jsonify({
         "status": "completed",
         "results": SCRIPT_OUTPUTS,
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     })
 
 @app.route('/security/results', methods=['GET'])
 @login_required
+@admin_required
 def get_security_results():
     """Obtener los resultados más recientes"""
     return jsonify({
         "results": SCRIPT_OUTPUTS,
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     })
 
 @app.route('/security/run-single/<script_name>', methods=['POST'])
@@ -594,7 +612,7 @@ def run_single_script(script_name):
             "stderr": result.stderr,
             "returncode": result.returncode,
             "success": result.returncode == 0,
-            "timestamp": datetime.datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat()
         }
         
         # Parseo específico
@@ -746,7 +764,7 @@ def setup_first_admin():
     
     users_db[username] = {
         'password_hash': password_hash.decode('utf-8'),
-        'created_at': datetime.datetime.now().isoformat(),
+        'created_at': datetime.now().isoformat(),
         'role': 'admin',  # Forzamos admin
         'last_login': None
     }
@@ -972,7 +990,7 @@ class OctomatrixThreatDetector:
             'should_block': should_block,
             'risk_level': self._get_risk_level(threat_score),
             'recommended_actions': actions,
-            'timestamp': datetime.datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat()
         }
     
     def _detect_input_type(self, user_input: str) -> str:
@@ -1068,6 +1086,7 @@ octomatrix_detector = OctomatrixThreatDetector()
 # ============================================
 
 @app.route('/octomatrix/check-input', methods=['POST'])
+@login_required
 def octomatrix_check_input():
     """
     ENDPOINT PRINCIPAL: Recibe input y BLOQUEA si es necesario
@@ -1099,7 +1118,7 @@ def octomatrix_check_input():
             "analysis": analysis,
             "action": "BLOCK",
             "ip_address": client_ip,
-            "timestamp": datetime.datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat()
         }), 403  # 403 Forbidden - Bloqueado
     
     # Input seguro - 200 OK
@@ -1108,7 +1127,7 @@ def octomatrix_check_input():
         "message": "✅ Input permitido - No se detectaron amenazas",
         "analysis": analysis,
         "action": "ALLOW",
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     }), 200
 
 # ============================================
@@ -1116,6 +1135,7 @@ def octomatrix_check_input():
 # ============================================
 
 @app.route('/octomatrix/check-batch', methods=['POST'])
+@admin_required
 def octomatrix_check_batch():
     """Analizar múltiples inputs en una sola solicitud"""
     data = request.get_json()
@@ -1152,20 +1172,22 @@ def octomatrix_check_batch():
         "total_analyzed": len(results),
         "total_blocked": blocks,
         "results": results,
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     }), 200
 
 @app.route('/octomatrix/patterns', methods=['GET'])
+@login_required
 def octomatrix_patterns():
     """Mostrar los patrones de detección actuales"""
     return jsonify({
         "status": "success",
         "patterns": octomatrix_detector.patterns,
         "total_patterns": sum(len(v) for v in octomatrix_detector.patterns.values()),
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     }), 200
 
 @app.route('/octomatrix/test-payloads', methods=['GET'])
+@admin_required
 def octomatrix_test_payloads():
     """Endpoint de prueba con payloads de pre_deploy_check.py"""
     test_payloads = {
@@ -1207,19 +1229,19 @@ def octomatrix_test_payloads():
     return jsonify({
         "status": "success",
         "test_results": results,
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     }), 200
 
 # ============================================
 # MÉTODO PARA REGISTRAR ACTIVIDAD SOSPECHOSA
 # ============================================
 
-def log_suspicious_activity(self, ip, input_data, analysis):
+def log_suspicious_activity(ip, input_data, analysis):
     """Registrar actividad sospechosa para análisis posterior"""
     try:
         log_file = Path(__file__).parent / "suspicious_activity.log"
         log_entry = {
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": datetime.now().isoformat(),
             "ip": ip,
             "input": input_data[:200],  # Truncar para log
             "analysis": analysis,
@@ -1267,13 +1289,302 @@ def debug_octomatrix_model():
         "status": "success",
         "model_info": model_info,
         "current_patterns": octomatrix_detector.patterns,
-        "timestamp": datetime.datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat()
     }), 200
 
 @app.route('/octomatrix/test', methods=['GET'])
 def octomatrix_test_page():
     """Página HTML para probar Octomatrix"""
     return render_template("octomatrix_test.html", title="Octomatrix Security Tester")
+
+# enpoints capa estatica
+# app.py - Reemplaza el endpoint /buy actual con este
+
+@app.route('/buy', methods=['GET', 'POST'])
+@custom_jwt
+def buy_service():
+    """Endpoint para compra - Maneja formularios con estados"""
+    
+    if request.method == 'GET':
+        # Renderizar formulario HTML
+        return render_template("buy.html", 
+                             title="Formulario de Compra",
+                             user=request.current_user if hasattr(request, 'current_user') else None)
+    
+    elif request.method == 'POST':
+        try:
+            # Obtener datos del formulario
+            data = request.get_json() if request.is_json else request.form
+            
+            nombre = data.get('nombre')
+            direccion = data.get('direccion_fisica')
+            celular = data.get('celular')
+            
+            # Validaciones básicas
+            if not all([nombre, direccion, celular]):
+                return jsonify({
+                    "error": "Todos los campos son requeridos",
+                    "required": ["nombre", "direccion_fisica", "celular"]
+                }), 400
+            
+            # Validar celular (ejemplo simple)
+            if not celular.isdigit() or len(celular) < 7:
+                return jsonify({"error": "Celular inválido"}), 400
+            
+            # Verificar Octomatrix para seguridad
+            octo_result = octomatrix_detector.analyze_input(f"{nombre} {direccion} {celular}")
+            if octo_result['should_block']:
+                log_suspicious_activity(request.remote_addr, data, octo_result)
+                return jsonify({
+                    "status": "blocked",
+                    "message": "Input bloqueado por seguridad",
+                    "risk_level": octo_result['risk_level']
+                }), 403
+            
+            # Crear nuevo formulario
+            nuevo_formulario = Formulario(
+                nombre=nombre.strip(),
+                direccion_fisica=direccion.strip(),
+                celular=celular.strip(),
+                status=FormStatus.DELAYED,  # Estado inicial
+                created_by=request.current_user.get('username') if hasattr(request, 'current_user') else None,
+                username=request.current_user.get('username') if hasattr(request, 'current_user') else None
+            )
+            
+            # Guardar en base de datos
+            db.session.add(nuevo_formulario)
+            db.session.commit()
+            
+            # Si la solicitud es JSON, devolver respuesta JSON
+            if request.is_json:
+                return jsonify({
+                    "status": "success",
+                    "message": "Formulario creado exitosamente",
+                    "formulario": nuevo_formulario.to_dict(),
+                    "estado_inicial": "delayed"
+                }), 201
+            else:
+                # Si es POST desde formulario HTML, redirigir o mostrar mensaje
+                return render_template("buy.html", 
+                                     success=True, 
+                                     message="Formulario enviado correctamente",
+                                     formulario_id=nuevo_formulario.id)
+                
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": f"Error al procesar formulario: {str(e)}"}), 500
+
+# app.py - Agrega estos endpoints después del /buy
+
+@app.route('/api/formularios', methods=['GET'])
+@login_required
+def listar_formularios():
+    """Listar todos los formularios (con filtros opcionales)"""
+    
+    # Obtener parámetros de consulta
+    status_filter = request.args.get('status')
+    username_filter = request.args.get('username')
+    
+    # Construir query
+    query = Formulario.query
+    
+    if status_filter:
+        try:
+            status_enum = FormStatus(status_filter)
+            query = query.filter_by(status=status_enum)
+        except ValueError:
+            return jsonify({"error": f"Status inválido. Opciones: {[s.value for s in FormStatus]}"}), 400
+    
+    if username_filter:
+        query = query.filter_by(username=username_filter)
+    
+    # Ordenar por fecha de creación (más recientes primero)
+    formularios = query.order_by(Formulario.created_at.desc()).all()
+    
+    return jsonify({
+        "status": "success",
+        "total": len(formularios),
+        "formularios": [f.to_dict() for f in formularios]
+    }), 200
+
+@app.route('/api/formularios/<int:form_id>', methods=['GET'])
+@login_required
+def obtener_formulario(form_id):
+    """Obtener un formulario específico"""
+    formulario = Formulario.query.get_or_404(form_id)
+    return jsonify(formulario.to_dict()), 200
+
+@app.route('/api/formularios/<int:form_id>/status', methods=['PUT', 'PATCH'])
+@login_required
+def actualizar_estado(form_id):
+    """Actualizar estado de un formulario"""
+    formulario = Formulario.query.get_or_404(form_id)
+    
+    data = request.get_json()
+    if not data or 'status' not in data:
+        return jsonify({"error": "Se requiere campo 'status'"}), 400
+    
+    new_status = data['status']
+    notes = data.get('notes')
+    
+    # Verificar si es admin para ciertos estados
+    if new_status in ['approved', 'archived']:
+        if request.current_user.get('role') != 'admin':
+            return jsonify({"error": "Solo administradores pueden aprobar o archivar"}), 403
+    
+    try:
+        formulario.update_status(new_status, notes)
+        
+        return jsonify({
+            "status": "success",
+            "message": f"Estado actualizado a {new_status}",
+            "formulario": formulario.to_dict()
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/formularios/<int:form_id>', methods=['DELETE'])
+@admin_required
+def eliminar_formulario(form_id):
+    """Eliminar un formulario (solo admin)"""
+    formulario = Formulario.query.get_or_404(form_id)
+    
+    db.session.delete(formulario)
+    db.session.commit()
+    
+    return jsonify({
+        "status": "success",
+        "message": f"Formulario {form_id} eliminado"
+    }), 200
+
+@app.route('/api/formularios/estadisticas', methods=['GET'])
+@login_required
+def estadisticas_formularios():
+    """Estadísticas de formularios por estado"""
+    
+    stats = {}
+    for status in FormStatus:
+        count = Formulario.query.filter_by(status=status).count()
+        stats[status.value] = count
+    
+    stats['total'] = sum(stats.values())
+    
+    return jsonify({
+        "status": "success",
+        "estadisticas": stats
+    }), 200
+
+# Ejemplo: Obtener SOLO los aprobados
+@app.route('/api/formularios/approved', methods=['GET'])
+def get_approved():
+    # CONSULTA ACTIVA a la BD - NO son datos decorativos
+    approved = Formulario.query.filter_by(status=FormStatus.APPROVED).all()
+    return jsonify([f.to_dict() for f in approved])
+
+# Ejemplo: Obtener los que necesitan revisión
+@app.route('/api/formularios/pending-review', methods=['GET'])
+def get_pending():
+    # CONSULTA REAL - NO es decorativo
+    pending = Formulario.query.filter(
+        Formulario.status.in_([FormStatus.DELAYED, FormStatus.REVISED])
+    ).all()
+    return jsonify([f.to_dict() for f in pending])
+
+@app.route('/api/demo/estados-activos', methods=['GET'])
+def demo_estados():
+    """Demostración de que el ORM gestiona datos activamente"""
+    
+    # 1. Crear un formulario de prueba
+    test = Formulario(
+        nombre="TEST_ACTIVO",
+        direccion_fisica="Demo Dirección",
+        celular="123456789"
+    )
+    db.session.add(test)
+    db.session.commit()
+    
+    resultado = {
+        "paso1_creado": test.to_dict(),
+        "mensaje": "Status inicial = delayed (automático)"
+    }
+    
+    # 2. Cambiar estado a REVISED
+    test.status = FormStatus.REVISED
+    db.session.commit()
+    
+    resultado["paso2_cambiado"] = test.to_dict()
+    resultado["mensaje2"] = "Status cambiado a revised"
+    
+    # 3. Agregar nota y cambiar a APPROVED
+    test.status = FormStatus.APPROVED
+    test.notes = "Aprobado en demo"
+    db.session.commit()
+    
+    resultado["paso3_aprobado"] = test.to_dict()
+    resultado["mensaje3"] = "Status cambiado a approved con nota"
+    
+    # 4. Mostrar que updated_at cambió automáticamente
+    resultado["conclusion"] = "⚠️ OBSERVA: updated_at cambió en cada paso automáticamente"
+    
+    return jsonify(resultado)
+
+@app.route('/api/dashboard/metrics', methods=['GET'])
+def dashboard_metrics():
+    """Métricas EN VIVO - NO son decorativas"""
+    return jsonify({
+        "total": Formulario.query.count(),
+        "pendientes": Formulario.query.filter_by(status=FormStatus.DELAYED).count(),
+        "revisados": Formulario.query.filter_by(status=FormStatus.REVISED).count(),
+        "aprobados": Formulario.query.filter_by(status=FormStatus.APPROVED).count(),
+        "archivados": Formulario.query.filter_by(status=FormStatus.ARCHIVED).count(),
+        "ultima_actualizacion": datetime.now().isoformat()
+    })
+
+@app.route('/api/formularios/<int:form_id>/approve', methods=['POST'])
+@admin_required
+def approve_form(form_id):
+    """Workflow de aprobación - MODIFICA LA BD"""
+    form = Formulario.query.get_or_404(form_id)
+    
+    # Lógica de negocio REAL
+    if form.status == FormStatus.ARCHIVED:
+        return jsonify({"error": "No se puede aprobar un formulario archivado"}), 400
+    
+    # CAMBIO REAL EN BD
+    form.status = FormStatus.APPROVED
+    form.notes = f"Aprobado por {request.current_user['username']} el {datetime.now().strftime('%Y-%m-%d')}"
+    db.session.commit()
+    
+    # Esto es un CAMBIO REAL, no decorativo
+    return jsonify({
+        "mensaje": "Formulario APROBADO en el sistema",
+        "formulario": form.to_dict(),
+        "accion": "BD_ACTUALIZADA"
+    })
+
+
+@app.route('/dashboard/formularios', methods=['GET'])
+@login_required
+def dashboard_formularios_view():
+    """Vista HTML del dashboard de formularios"""
+    return render_template("dashboard_formularios.html", 
+                         title="Dashboard de Formularios",
+                         user=request.current_user if hasattr(request, 'current_user') else None)
+
+@app.route('/landing')
+def generic_site():
+    "vista corporativa generica"
+    return render_template("landing.html")
+
+@app.route('/who')
+def about():
+    "vista corporativa generica"
+    return render_template("who.html")
+
+@app.route('/where')
+def site_location():
+    "vista corporativa generica"
+    return render_template("where.html")
 
 @app.route('/')
 def home():
@@ -1307,11 +1618,15 @@ if __name__ == "__main__":
     print("   GET  /health        - Estado del servidor (JSON)")
     print("\n🔧 FIX APPLIED: Todos los endpoints POST retornan JSON puro")
     print("🌐 Accede desde:")
-    print("   http://localhost:5000/setup/first-admin")
-    print("   http://localhost:5000/account")
     print("   http://localhost:5000/register") 
     print("   http://localhost:5000/login")
+    print("   http://localhost:5000/account")
     print("   http://localhost:5000/security/dashboard")
     print("   http://localhost:5000/octomatrix/test")
+    print("   http://localhost:5000/who")
+    print("   http://localhost:5000/where")
+    print("   http://localhost:5000/landing")
+    print("   http://localhost:5000/dashboard/formularios")
+    print("   http://localhost:5000/buy")
     
     app.run(host='0.0.0.0', port=5000, debug=True)

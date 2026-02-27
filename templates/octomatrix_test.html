@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Octomatrix Security Tester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 10px 10px 0 0;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header h1 span {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .main-content {
+            background: white;
+            padding: 30px;
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .input-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .input-group select {
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            background: white;
+            cursor: pointer;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .payloads-section {
+            margin-bottom: 30px;
+        }
+
+        .payloads-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .payload-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .payload-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-color: #667eea;
+        }
+
+        .payload-card.sql {
+            border-left: 4px solid #dc3545;
+        }
+
+        .payload-card.path {
+            border-left: 4px solid #fd7e14;
+        }
+
+        .payload-card.xss {
+            border-left: 4px solid #ffc107;
+        }
+
+        .payload-card.normal {
+            border-left: 4px solid #28a745;
+        }
+
+        .payload-card h4 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .payload-card p {
+            color: #666;
+            font-size: 0.9em;
+            word-break: break-all;
+        }
+
+        .result-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .result-status {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .status-allowed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-blocked {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .threat-meter {
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .threat-meter-fill {
+            height: 100%;
+            transition: width 0.3s;
+        }
+
+        .threat-meter-fill.critico { background: #dc3545; }
+        .threat-meter-fill.alto { background: #fd7e14; }
+        .threat-meter-fill.medio { background: #ffc107; }
+        .threat-meter-fill.bajo { background: #17a2b8; }
+        .threat-meter-fill.info { background: #28a745; }
+
+        .threats-list {
+            list-style: none;
+            margin-top: 15px;
+        }
+
+        .threats-list li {
+            padding: 10px;
+            margin-bottom: 8px;
+            background: white;
+            border-radius: 5px;
+            border-left: 4px solid #dc3545;
+        }
+
+        .recommendations {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff3cd;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 30px;
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .badge-danger { background: #dc3545; color: white; }
+        .badge-warning { background: #ffc107; color: #333; }
+        .badge-success { background: #28a745; color: white; }
+        .badge-info { background: #17a2b8; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔮 <span>Octomatrix</span> Security Tester</h1>
+            <p>Prueba inputs maliciosos y ve cómo el modelo los detecta</p>
+        </div>
+
+        <div class="main-content">
+            <div class="input-section">
+                <h3>📝 Probar input personalizado</h3>
+                <div class="input-group">
+                    <input type="text" id="userInput" placeholder="Escribe cualquier texto para analizar..." value="Hola mundo">
+                    <select id="inputType">
+                        <option value="auto">Auto-detectar</option>
+                        <option value="username">Username</option>
+                        <option value="password">Password</option>
+                        <option value="comment">Comentario</option>
+                        <option value="path">Path/Archivo</option>
+                        <option value="url">URL</option>
+                        <option value="search">Búsqueda</option>
+                        <option value="generic">Genérico</option>
+                    </select>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="analyzeInput()">🔍 Analizar Input</button>
+                    <button class="btn btn-secondary" onclick="clearInput()">🗑️ Limpiar</button>
+                </div>
+            </div>
+
+            <div class="payloads-section">
+                <h3>🎯 Payloads de prueba (desde pre_deploy_check.py)</h3>
+                <div class="payloads-grid" id="payloadsGrid"></div>
+            </div>
+
+            <div class="loading" id="loading">
+                <div class="loading-spinner"></div>
+                <p>Analizando con Octomatrix...</p>
+            </div>
+
+            <div class="result-section" id="resultSection" style="display: none;">
+                <div class="result-header">
+                    <h3>📊 Resultado del Análisis</h3>
+                    <span class="result-status" id="resultStatus"></span>
+                </div>
+
+                <div>
+                    <strong>Input analizado:</strong>
+                    <p id="analyzedInput" style="background: white; padding: 10px; border-radius: 5px; margin-top: 5px;"></p>
+                </div>
+
+                <div style="margin-top: 15px;">
+                    <strong>Tipo detectado:</strong> <span id="detectedType"></span>
+                </div>
+
+                <div style="margin-top: 15px;">
+                    <strong>Nivel de riesgo:</strong> <span id="riskLevel"></span>
+                    <div class="threat-meter">
+                        <div class="threat-meter-fill" id="threatMeter" style="width: 0%;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>0%</span>
+                        <span>25%</span>
+                        <span>50%</span>
+                        <span>75%</span>
+                        <span>100%</span>
+                    </div>
+                </div>
+
+                <div id="threatsContainer">
+                    <h4 style="margin-top: 20px;">🚨 Amenazas detectadas:</h4>
+                    <ul class="threats-list" id="threatsList"></ul>
+                </div>
+
+                <div class="recommendations" id="recommendations">
+                    <strong>📋 Recomendaciones:</strong>
+                    <ul id="recommendationsList" style="margin-top: 10px; margin-left: 20px;"></ul>
+                </div>
+
+                <div style="margin-top: 20px; text-align: right;">
+                    <small id="timestamp"></small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Payloads de prueba basados en pre_deploy_check.py
+        const testPayloads = [
+            {
+                category: 'sql',
+                name: 'SQL Injection Básico',
+                payload: "' OR '1'='1",
+                type: 'username'
+            },
+            {
+                category: 'sql',
+                name: 'SQL Injection con comentario',
+                payload: "admin' --",
+                type: 'username'
+            },
+            {
+                category: 'sql',
+                name: 'DROP TABLE',
+                payload: "'; DROP TABLE users; --",
+                type: 'search'
+            },
+            {
+                category: 'sql',
+                name: 'UNION SELECT',
+                payload: "' UNION SELECT * FROM users--",
+                type: 'search'
+            },
+            {
+                category: 'path',
+                name: 'Path Traversal Linux',
+                payload: "../../../etc/passwd",
+                type: 'path'
+            },
+            {
+                category: 'path',
+                name: 'Path Traversal Windows',
+                payload: "..\\..\\..\\windows\\win.ini",
+                type: 'path'
+            },
+            {
+                category: 'path',
+                name: 'Path Traversal URL encoded',
+                payload: "%2e%2e%2f%2e%2e%2fetc/passwd",
+                type: 'path'
+            },
+            {
+                category: 'xss',
+                name: 'XSS Básico',
+                payload: "  <script>alert('xss') /script>",
+                type: 'comment'
+            },
+            {
+                category: 'xss',
+                name: 'XSS con evento',
+                payload: "<img src=x onerror=alert(1)>",
+                type: 'comment'
+            },
+            {
+                category: 'command',
+                name: 'Command Injection',
+                payload: "; ls -la",
+                type: 'search'
+            },
+            {
+                category: 'normal',
+                name: 'Texto normal',
+                payload: "Hola mundo, este es un comentario legítimo",
+                type: 'comment'
+            },
+            {
+                category: 'normal',
+                name: 'Username normal',
+                payload: "juan_perez_123",
+                type: 'username'
+            }
+        ];
+
+        // Cargar payloads en la grid
+        function loadPayloads() {
+            const grid = document.getElementById('payloadsGrid');
+            grid.innerHTML = '';
+            
+            testPayloads.forEach(payload => {
+                const card = document.createElement('div');
+                card.className = `payload-card ${payload.category}`;
+                card.onclick = () => usePayload(payload);
+                
+                card.innerHTML = `
+                    <h4>${payload.name} 
+                        <span class="badge badge-${payload.category === 'sql' ? 'danger' : 
+                                                      payload.category === 'path' ? 'warning' :
+                                                      payload.category === 'xss' ? 'warning' :
+                                                      payload.category === 'command' ? 'danger' : 'success'}">
+                            ${payload.category}
+                        </span>
+                    </h4>
+                    <p>${payload.payload}</p>
+                `;
+                
+                grid.appendChild(card);
+            });
+        }
+
+        // Usar un payload
+        function usePayload(payload) {
+            document.getElementById('userInput').value = payload.payload;
+            document.getElementById('inputType').value = payload.type;
+            analyzeInput();
+        }
+
+        // Analizar input
+        async function analyzeInput() {
+            const input = document.getElementById('userInput').value;
+            const type = document.getElementById('inputType').value;
+
+            if (!input) {
+                alert('Por favor, escribe algo para analizar');
+                return;
+            }
+
+            // Mostrar loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('resultSection').style.display = 'none';
+
+            try {
+                const response = await fetch('/octomatrix/check-input', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        input: input,
+                        type: type
+                    })
+                });
+
+                const data = await response.json();
+                displayResults(data);
+            } catch (error) {
+                alert('Error al analizar: ' + error.message);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // Mostrar resultados
+        function displayResults(data) {
+            const analysis = data.analysis;
+            
+            // Mostrar sección
+            document.getElementById('resultSection').style.display = 'block';
+
+            // Status
+            const statusEl = document.getElementById('resultStatus');
+            statusEl.textContent = data.status === 'allowed' ? '✅ PERMITIDO' : '❌ BLOQUEADO';
+            statusEl.className = `result-status ${data.status === 'allowed' ? 'status-allowed' : 'status-blocked'}`;
+
+            // Input analizado
+            document.getElementById('analyzedInput').textContent = analysis.input;
+            document.getElementById('detectedType').textContent = analysis.input_type;
+
+            // Nivel de riesgo y meter
+            const riskLevel = analysis.risk_level;
+            const riskEl = document.getElementById('riskLevel');
+            riskEl.textContent = riskLevel;
+            
+            const threatScore = analysis.threat_score;
+            const meter = document.getElementById('threatMeter');
+            meter.style.width = threatScore + '%';
+            meter.className = `threat-meter-fill ${riskLevel.toLowerCase()}`;
+
+            // Amenazas
+            const threatsList = document.getElementById('threatsList');
+            threatsList.innerHTML = '';
+            
+            const threats = analysis.threats_detected;
+            if (Object.keys(threats).length === 0) {
+                threatsList.innerHTML = '<li style="border-left-color: #28a745;">✅ No se detectaron amenazas</li>';
+            } else {
+                for (const [type, details] of Object.entries(threats)) {
+                    const li = document.createElement('li');
+                    li.style.borderLeftColor = '#dc3545';
+                    li.innerHTML = `<strong>${type.replace('_', ' ').toUpperCase()}:</strong> ${details.join(', ')}`;
+                    threatsList.appendChild(li);
+                }
+            }
+
+            // Recomendaciones
+            const recommendationsList = document.getElementById('recommendationsList');
+            recommendationsList.innerHTML = '';
+            analysis.recommended_actions.forEach(action => {
+                const li = document.createElement('li');
+                li.innerHTML = action;
+                recommendationsList.appendChild(li);
+            });
+
+            // Timestamp
+            document.getElementById('timestamp').textContent = 'Analizado: ' + new Date(analysis.timestamp).toLocaleString();
+
+            // Si está bloqueado, mostrar advertencia
+            if (data.status === 'blocked') {
+                const blockWarning = document.createElement('div');
+                blockWarning.style.marginTop = '15px';
+                blockWarning.style.padding = '15px';
+                blockWarning.style.background = '#f8d7da';
+                blockWarning.style.borderRadius = '8px';
+                blockWarning.style.border = '2px solid #dc3545';
+                blockWarning.innerHTML = '🚫 <strong>INPUT BLOQUEADO</strong> - Este input ha sido denegado por razones de seguridad';
+                
+                const oldWarning = document.getElementById('blockWarning');
+                if (oldWarning) oldWarning.remove();
+                
+                blockWarning.id = 'blockWarning';
+                document.getElementById('resultSection').appendChild(blockWarning);
+            } else {
+                const oldWarning = document.getElementById('blockWarning');
+                if (oldWarning) oldWarning.remove();
+            }
+        }
+
+        // Limpiar input
+        function clearInput() {
+            document.getElementById('userInput').value = '';
+            document.getElementById('resultSection').style.display = 'none';
+        }
+
+        // Inicializar
+        loadPayloads();
+
+        // Probar con un payload por defecto
+        window.onload = function() {
+            setTimeout(() => {
+                usePayload(testPayloads[10]); // Texto normal
+            }, 500);
+        };
+    </script>
+</body>
+</html>
